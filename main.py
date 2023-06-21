@@ -34,9 +34,9 @@ class Opt:
         psh_h = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower consumption
 
         v = self.model.dvar((self.pds.n_bus, self.T))  # buses voltage
-        I = self.model.dvar((self.pds.n_bus, self.T))  # lines squared current flow
-        p = self.model.dvar((self.pds.n_bus, self.T))  # active power flow from\to bus
-        q = self.model.dvar((self.pds.n_bus, self.T))  # reactive power flow from\to bus
+        I = self.model.dvar((self.pds.n_lines, self.T))  # lines squared current flow
+        p = self.model.dvar((self.pds.n_lines, self.T))  # active power flow from\to bus
+        q = self.model.dvar((self.pds.n_lines, self.T))  # reactive power flow from\to bus
 
         self.model.st(gen_p >= 0)
         self.model.st(gen_q >= 0)
@@ -59,22 +59,24 @@ class Opt:
 
     def generators_balance(self):
         # generators balance - eq 4-5
-        gen_idx = self.pds.generators.index.to_list()
-        self.model.st(self.x['gen_p'] - self.x['p'][gen_idx, :]
-                      - self.pds.bus.loc[gen_idx, 'G'].values @ self.x['v'][gen_idx, :] == 0)
+        for gen_idx, gen in self.pds.generators.iterrows():
+            gen_links = self.pds.get_bus_lines(gen_idx).index.to_list()
+            self.model.st(self.x['gen_p'][gen_idx] - self.x['q'][gen_links, :].sum(axis=0)
+                          - self.pds.bus.loc[gen_idx, 'G'] * self.x['v'][gen_idx, :] == 0)
 
-        self.model.st(self.x['gen_q'] - self.x['q'][gen_idx, :]
-                      - self.pds.bus.loc[gen_idx, 'B'].values @ self.x['v'][gen_idx, :] == 0)
+            self.model.st(self.x['gen_q'][gen_idx] - self.x['q'][gen_links, :].sum(axis=0)
+                          - self.pds.bus.loc[gen_idx, 'B'] * self.x['v'][gen_idx, :] == 0)
 
     def bus_balance(self):
-        r = self.pds.get_connectivity_mat(param='r_ohm')
-        x = self.pds.get_connectivity_mat(param='x_ohm')
+        r = self.pds.bus_lines_mat(direction='in', param='r_ohm')
+        x = self.pds.bus_lines_mat(param='x_ohm')
+        a = self.pds.bus_lines_mat()
 
-        self.model.st(self.pds.A.T @ self.x['p'] - r @ self.x['I'] - self.pds.A @ self.x['p']
-                      - self.pds.dem_active.values + self.pds.bus.loc[:, 'G'].values @ self.x['v'] == 0)
+        self.model.st(a @ self.x['p'] - r @ self.x['I'] - self.pds.dem_active.values +
+                      self.pds.bus.loc[:, 'G'].values @ self.x['v'] == 0)
 
-        self.model.st(self.pds.A.T @ self.x['q'] - x @ self.x['I'] - self.pds.A @ self.x['q']
-                      - self.pds.dem_reactive_power.values + self.pds.bus.loc[:, 'B'].values @ self.x['v'] == 0)
+        self.model.st(a @ self.x['q'] - x @ self.x['I'] - self.pds.dem_reactive_power.values +
+                      self.pds.bus.loc[:, 'B'].values @ self.x['v'] == 0)
 
     def energy_conservation(self):
         r = self.pds.get_connectivity_mat(param='r_ohm')
@@ -95,5 +97,4 @@ class Opt:
 
 if __name__ == "__main__":
     opt = Opt(pds_data=PDS_DATA, wds_data=WDS_DATA, T=24)
-    # opt.solve()
-    print(opt.pds.A - opt.pds.A.T)
+    opt.solve()

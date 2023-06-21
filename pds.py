@@ -30,10 +30,6 @@ class PDS:
     def get_bus_lines(self, bus_id):
         return self.lines.loc[(self.lines['from_bus'] == bus_id) | (self.lines['to_bus'] == bus_id)]
 
-    def get_reactance_mat(self):
-        y = np.zeros((self.n_bus, self.n_bus))
-        pass
-
     def get_connectivity_mat(self, param=''):
         mat = np.zeros((self.n_bus, self.n_bus))
 
@@ -45,4 +41,19 @@ class PDS:
             mat_values = 1
 
         mat[start_indices, end_indices] = mat_values
+        return mat
+
+    def bus_lines_mat(self, direction='both', param=''):
+        mat = np.zeros((self.n_bus, self.n_lines))
+        mat[self.lines.loc[:, 'from_bus'], np.arange(self.n_lines)] = -1
+        mat[self.lines.loc[:, 'to_bus'], np.arange(self.n_lines)] = 1
+
+        if direction == 'in':
+            mat[mat == -1] = 0
+        if direction == 'out':
+            mat[mat == 1] = 0
+
+        if param:
+            # row-wise multiplication
+            mat = mat * self.lines[param].values
         return mat
