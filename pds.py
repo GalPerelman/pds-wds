@@ -19,7 +19,8 @@ class PDS:
         self.n_lines = len(self.lines)
         self.n_psh = len(self.psh)
 
-        self.generators = self.bus.loc[self.bus['type'] == 'reference']
+        self.gen_idx = np.where(self.bus['type'] == 'gen', 1, 0)
+        self.gen_mat = self.gen_idx * np.eye(self.n_bus)
         self.A = self.get_connectivity_mat()
 
         # read other parameters
