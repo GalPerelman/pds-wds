@@ -1,9 +1,13 @@
 import os
+
+import rsome
 from rsome import ro
 from rsome import grb_solver as grb
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
+import graphs
 from pds import PDS
 from wds import WDS
 
@@ -28,8 +32,8 @@ class Opt:
         return pds, wds
 
     def declare_vars(self):
-        gen_p = self.model.dvar((len(self.pds.generators), self.T))
-        gen_q = self.model.dvar((len(self.pds.generators), self.T))
+        gen_p = self.model.dvar((self.pds.n_bus, self.T))
+        gen_q = self.model.dvar((self.pds.n_bus, self.T))
         psh_y = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower injection
         psh_h = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower consumption
 
@@ -43,58 +47,83 @@ class Opt:
         self.model.st(psh_y >= 0)
         self.model.st(psh_h >= 0)
         self.model.st(v >= 0)
-        self.model.st(I >= 0)
 
         pump_p = self.model.dvar((self.wds.n_pumps, self.T))
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q}
 
     def build(self):
         self.objective_func()
-        self.generators_balance()
         self.bus_balance()
+        self.energy_conservation()
+        self.voltage_bounds()
+        self.power_flow_constraint()
 
     def objective_func(self):
-        self.model.min((self.pds.grid_tariff.values @ self.x['gen_p']).sum()
+        self.model.min((self.x['gen_p'] @ self.pds.grid_tariff.values).sum()
                        + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum())
 
-    def generators_balance(self):
-        # generators balance - eq 4-5
-        for gen_idx, gen in self.pds.generators.iterrows():
-            gen_links = self.pds.get_bus_lines(gen_idx).index.to_list()
-            self.model.st(self.x['gen_p'][gen_idx] - self.x['q'][gen_links, :].sum(axis=0)
-                          - self.pds.bus.loc[gen_idx, 'G'] * self.x['v'][gen_idx, :] == 0)
-
-            self.model.st(self.x['gen_q'][gen_idx] - self.x['q'][gen_links, :].sum(axis=0)
-                          - self.pds.bus.loc[gen_idx, 'B'] * self.x['v'][gen_idx, :] == 0)
-
     def bus_balance(self):
-        r = self.pds.bus_lines_mat(direction='in', param='r_ohm')
+        r = self.pds.bus_lines_mat(param='r_ohm')
         x = self.pds.bus_lines_mat(param='x_ohm')
         a = self.pds.bus_lines_mat()
 
-        self.model.st(a @ self.x['p'] - r @ self.x['I'] - self.pds.dem_active.values +
-                      self.pds.bus.loc[:, 'G'].values @ self.x['v'] == 0)
+        self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
+                      - r @ self.x['I']
+                      - self.pds.dem_active.values
+                      + self.pds.bus.loc[:, 'G'].values @ self.x['v']
+                      == 0)
 
-        self.model.st(a @ self.x['q'] - x @ self.x['I'] - self.pds.dem_reactive_power.values +
-                      self.pds.bus.loc[:, 'B'].values @ self.x['v'] == 0)
+        self.model.st(self.pds.gen_mat @ self.x['gen_q'] + a @ self.x['q']
+                      - x @ self.x['I']
+                      - self.pds.dem_reactive_power.values
+                      + self.pds.bus.loc[:, 'B'].values @ self.x['v']
+                      == 0)
 
     def energy_conservation(self):
-        r = self.pds.get_connectivity_mat(param='r_ohm')
-        x = self.pds.get_connectivity_mat(param='x_ohm')
-        self.model.st(-2 * (r @ self.x['p']) + ((r ** 2 + x ** 2) @ self.x['I']))
+        r = self.pds.lines['r_ohm'].values.reshape(1, -1)
+        x = self.pds.lines['x_ohm'].values.reshape(1, -1)
+        a = self.pds.bus_lines_mat()
+
+        self.model.st(a.T @ self.x['v']
+                      + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
+                      - (self.x['I'].T * (r ** 2 + x ** 2)).T
+                      == 0)
+
+    def voltage_bounds(self):
+        nom_v = self.pds.nominal_voltage_v
+        self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) * nom_v <= 0)
+        self.model.st(self.pds.bus['Vmin_pu'].values.reshape(-1, 1) * nom_v - self.x['v'] <= 0)
+
+    def power_flow_constraint(self):
+        """ Still not Working """
+        # a = self.pds.bus_lines_mat(direction='in')
+        # for t in range(self.T):
+        #     for l in range(self.pds.n_lines):
+        #         b_id = self.pds.lines.loc[l, 'to_bus']
+        #         self.model.st(rsome.square(self.x['p'][l, t])
+        #                       + rsome.square(self.x['q'][l, t])
+        #                       - self.x['v'][b_id, t] * self.x['I'][l, t]
+        #                       <= 0)
+        pass
 
     def solve(self):
         self.model.solve(display=False)
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
-        df = (pd.DataFrame({'from': (self.pds.A @ self.x['p'].get())[:, 0],
-              'to': (self.pds.A.T @ self.x['p'].get())[:, 0]}))
-        df['d'] = df['to'] - df['from']
-        print(df)
-        print(df.sum())
-        print(self.x['gen_p'].get())
+
+        df = self.pds.lines.copy()
+        df['p_lines'] = self.x['p'].get()[:, 0]
+        graphs.plot_graph(df, weights='p_lines')
+        plt.figure()
+        plt.bar(self.pds.bus.index, self.x['v'].get()[:, 0] / self.pds.nominal_voltage_v)
+
+    def get_results(self):
+        self.pds.lines['p_flow'] = self.x['gen_p'].get()
 
 
 if __name__ == "__main__":
     opt = Opt(pds_data=PDS_DATA, wds_data=WDS_DATA, T=24)
     opt.solve()
+
+
+    plt.show()
