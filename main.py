@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import opt
 import graphs
 from pds import PDS
 from wds import WDS
@@ -46,7 +47,6 @@ class Opt:
         self.model.st(gen_q >= 0)
         self.model.st(psh_y >= 0)
         self.model.st(psh_h >= 0)
-        self.model.st(v >= 0)
 
         pump_p = self.model.dvar((self.wds.n_pumps, self.T))
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q}
@@ -63,8 +63,8 @@ class Opt:
                        + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum())
 
     def bus_balance(self):
-        r = self.pds.bus_lines_mat(param='r_ohm')
-        x = self.pds.bus_lines_mat(param='x_ohm')
+        r = self.pds.bus_lines_mat(direction='in', param='r_ohm')
+        x = self.pds.bus_lines_mat(direction='in', param='x_ohm')
         a = self.pds.bus_lines_mat()
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
@@ -90,40 +90,36 @@ class Opt:
                       == 0)
 
     def voltage_bounds(self):
-        nom_v = self.pds.nominal_voltage_v
+        nom_v = self.pds.nominal_voltage_kv
         self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) * nom_v <= 0)
         self.model.st(self.pds.bus['Vmin_pu'].values.reshape(-1, 1) * nom_v - self.x['v'] <= 0)
 
     def power_flow_constraint(self):
-        """ Still not Working """
-        # a = self.pds.bus_lines_mat(direction='in')
-        # for t in range(self.T):
-        #     for l in range(self.pds.n_lines):
-        #         b_id = self.pds.lines.loc[l, 'to_bus']
-        #         self.model.st(rsome.square(self.x['p'][l, t])
-        #                       + rsome.square(self.x['q'][l, t])
-        #                       - self.x['v'][b_id, t] * self.x['I'][l, t]
-        #                       <= 0)
-        pass
+        for t in range(self.T):
+            for l in range(self.pds.n_lines):
+                b_id = self.pds.lines.loc[l, 'to_bus']
+                # self.model.st(rsome.rsocone(self.x['p'][l, t] + self.x['q'][l, t],
+                #                             self.x['v'][b_id, t],
+                #                             self.x['I'][l, t]))
 
     def solve(self):
         self.model.solve(display=False)
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
 
-        df = self.pds.lines.copy()
-        df['p_lines'] = self.x['p'].get()[:, 0]
-        graphs.plot_graph(df, weights='p_lines')
-        plt.figure()
-        plt.bar(self.pds.bus.index, self.x['v'].get()[:, 0] / self.pds.nominal_voltage_v)
+    def plot_results(self, t):
+        nodes_vals = {i: self.x['v'].get()[i, t] for i in range(self.pds.n_bus)}
+        nodes_vals = {k: round(v / self.pds.nominal_voltage_kv, 2) for k, v in nodes_vals.items()}
 
-    def get_results(self):
-        self.pds.lines['p_flow'] = self.x['gen_p'].get()
+        edge_vals = {i: self.x['p'].get()[i, t] for i in range(self.pds.n_lines)}
+        graphs.pds_graph(self.pds, edges_values=edge_vals, nodes_values=nodes_vals)
+
+        graphs.time_series(x=range(self.T), y=self.x['gen_p'].get()[t, :])
 
 
 if __name__ == "__main__":
     opt = Opt(pds_data=PDS_DATA, wds_data=WDS_DATA, T=24)
     opt.solve()
-
+    opt.plot_results(t=0)
 
     plt.show()
