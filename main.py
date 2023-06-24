@@ -12,8 +12,7 @@ import graphs
 from pds import PDS
 from wds import WDS
 
-PDS_DATA = os.path.join('data', 'pds')
-WDS_DATA = os.path.join('data', 'wds')
+plt.close("all")
 
 
 class Opt:
@@ -47,6 +46,7 @@ class Opt:
         self.model.st(gen_q >= 0)
         self.model.st(psh_y >= 0)
         self.model.st(psh_h >= 0)
+        self.model.st(I >= 0)
 
         pump_p = self.model.dvar((self.wds.n_pumps, self.T))
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q}
@@ -59,12 +59,13 @@ class Opt:
         self.power_flow_constraint()
 
     def objective_func(self):
-        self.model.min((self.x['gen_p'] @ self.pds.grid_tariff.values).sum()
-                       + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum())
+        self.model.min((self.pds.gen_mat @ self.x['gen_p'] @ self.pds.grid_tariff.values).sum().sum()
+                       + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
+                       )
 
     def bus_balance(self):
-        r = self.pds.bus_lines_mat(direction='in', param='r_ohm')
-        x = self.pds.bus_lines_mat(direction='in', param='x_ohm')
+        r = self.pds.bus_lines_mat(direction='in', param='r_kohm')
+        x = self.pds.bus_lines_mat(direction='in', param='x_kohm')
         a = self.pds.bus_lines_mat()
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
@@ -75,7 +76,7 @@ class Opt:
 
         self.model.st(self.pds.gen_mat @ self.x['gen_q'] + a @ self.x['q']
                       - x @ self.x['I']
-                      - self.pds.dem_reactive_power.values
+                      - self.pds.dem_reactive.values
                       + self.pds.bus.loc[:, 'B'].values @ self.x['v']
                       == 0)
 
@@ -84,7 +85,7 @@ class Opt:
         x = self.pds.lines['x_ohm'].values.reshape(1, -1)
         a = self.pds.bus_lines_mat()
 
-        self.model.st(a.T @ self.x['v']
+        self.model.st(a.T @ self.x['v'] * self.pds.nominal_voltage_kv
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T
                       == 0)
@@ -98,28 +99,40 @@ class Opt:
         for t in range(self.T):
             for l in range(self.pds.n_lines):
                 b_id = self.pds.lines.loc[l, 'to_bus']
-                # self.model.st(rsome.rsocone(self.x['p'][l, t] + self.x['q'][l, t],
-                #                             self.x['v'][b_id, t],
-                #                             self.x['I'][l, t]))
+                self.model.st(rsome.rsocone(self.x['p'][l, t] + self.x['q'][l, t],
+                                            self.x['v'][b_id, t],
+                                            self.x['I'][l, t]))
 
     def solve(self):
         self.model.solve(display=False)
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
 
-    def plot_results(self, t):
-        nodes_vals = {i: self.x['v'].get()[i, t] for i in range(self.pds.n_bus)}
-        nodes_vals = {k: round(v / self.pds.nominal_voltage_kv, 2) for k, v in nodes_vals.items()}
+    def extract_results(self, x, elem_type, series_type='time', elem_idx=None, t_idx=None, dec=1, factor=1):
+        n = {'nodes': self.pds.n_bus, 'lines': self.pds.n_lines}
+        if series_type == 'time':
+            values = {t: self.x[x].get()[elem_idx, t] * factor for t in range(self.T)}
 
-        edge_vals = {i: self.x['p'].get()[i, t] for i in range(self.pds.n_lines)}
-        graphs.pds_graph(self.pds, edges_values=edge_vals, nodes_values=nodes_vals)
+        if series_type == 'elements':
+            values = {i: self.x[x].get()[i, t_idx] * factor for i in range(n[elem_type])}
+
+        return {t: round(val, dec) for t, val in values.items()}
+
+    def plot_results(self, t, net_coords):
+        f = 1 / self.pds.nominal_voltage_kv
+        nodes_vals = self.extract_results(x='v', elem_type='nodes', series_type='elements', t_idx=0, dec=2, factor=f)
+        edges_vals = self.extract_results(x='p', elem_type='lines', series_type='elements', t_idx=0)
+        gr = graphs.OptGraphs(self.pds)
+        gr.pds_graph(edges_values=edges_vals, nodes_values=nodes_vals, net_coords=net_coords)
 
         graphs.time_series(x=range(self.T), y=self.x['gen_p'].get()[t, :])
 
 
 if __name__ == "__main__":
+    PDS_DATA = os.path.join('data', 'pds')
+    WDS_DATA = os.path.join('data', 'wds')
     opt = Opt(pds_data=PDS_DATA, wds_data=WDS_DATA, T=24)
     opt.solve()
-    opt.plot_results(t=0)
+    opt.plot_results(t=0, net_coords=graphs.IEEE33_POS)
 
     plt.show()
