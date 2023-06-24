@@ -1,0 +1,3 @@
+nominal_voltage_kv: 230
+power_base_mva: 100
+psh_tariff: 0.03
