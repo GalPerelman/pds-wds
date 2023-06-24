@@ -12,13 +12,14 @@ class PDS:
         self.lines = pd.read_csv(os.path.join(self.data_folder, 'lines.csv'), index_col=0)
         self.psh = pd.read_csv(os.path.join(self.data_folder, 'psh.csv'), index_col=0)
         self.dem_active = pd.read_csv(os.path.join(self.data_folder, 'dem_active_power.csv'), index_col=0)
-        self.dem_reactive_power = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)
+        self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)
         self.grid_tariff = pd.read_csv(os.path.join(self.data_folder, 'grid_tariff.csv'), index_col=0)
 
         self.n_bus = len(self.bus)
         self.n_lines = len(self.lines)
         self.n_psh = len(self.psh)
 
+        self.convert_resistance_units()
         self.gen_idx = np.where(self.bus['type'] == 'gen', 1, 0)
         self.gen_mat = self.gen_idx * np.eye(self.n_bus)
         self.A = self.get_connectivity_mat()
@@ -27,6 +28,10 @@ class PDS:
         with open(os.path.join(self.data_folder, 'params.yaml'), 'r') as f:
             params = yaml.safe_load(f)
             self.__dict__.update(params)
+
+    def convert_resistance_units(self):
+        self.lines['r_kohm'] = self.lines['r_ohm'] / 1000
+        self.lines['x_kohm'] = self.lines['x_ohm'] / 1000
 
     def get_bus_lines(self, bus_id):
         return self.lines.loc[(self.lines['from_bus'] == bus_id) | (self.lines['to_bus'] == bus_id)]
