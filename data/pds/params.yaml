@@ -1,3 +1,5 @@
 nominal_voltage_kv: 13.3
 power_base_mva: 100
 psh_tariff: 0.03
+active_demand_factor: 0.7
+reactive_demand_factor: 0.7
