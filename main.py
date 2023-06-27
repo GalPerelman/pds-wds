@@ -59,13 +59,13 @@ class Opt:
         self.power_flow_constraint()
 
     def objective_func(self):
-        self.model.min((self.pds.gen_mat @ self.x['gen_p'] @ self.pds.grid_tariff.values).sum().sum()
+        self.model.min((self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
                        + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
                        )
 
     def bus_balance(self):
-        r = self.pds.bus_lines_mat(direction='in', param='r_kohm')
-        x = self.pds.bus_lines_mat(direction='in', param='x_kohm')
+        r = self.pds.bus_lines_mat(direction='in', param='r_pu')
+        x = self.pds.bus_lines_mat(direction='in', param='x_pu')
         a = self.pds.bus_lines_mat()
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
@@ -81,30 +81,28 @@ class Opt:
                       == 0)
 
     def energy_conservation(self):
-        r = self.pds.lines['r_ohm'].values.reshape(1, -1)
-        x = self.pds.lines['x_ohm'].values.reshape(1, -1)
+        r = self.pds.lines['r_pu'].values.reshape(1, -1)
+        x = self.pds.lines['x_pu'].values.reshape(1, -1)
         a = self.pds.bus_lines_mat()
-
-        self.model.st(a.T @ self.x['v'] * self.pds.nominal_voltage_kv
+        self.model.st(a.T @ self.x['v']
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T
                       == 0)
 
     def voltage_bounds(self):
-        nom_v = self.pds.nominal_voltage_kv
-        self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) * nom_v <= 0)
-        self.model.st(self.pds.bus['Vmin_pu'].values.reshape(-1, 1) * nom_v - self.x['v'] <= 0)
+        self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) <= 0)
+        self.model.st(self.pds.bus['Vmin_pu'].values.reshape(-1, 1) - self.x['v'] <= 0)
 
     def power_flow_constraint(self):
         for t in range(self.T):
-            for l in range(self.pds.n_lines):
-                b_id = self.pds.lines.loc[l, 'to_bus']
-                self.model.st(rsome.rsocone(self.x['p'][l, t] + self.x['q'][l, t],
+            for line in range(self.pds.n_lines):
+                b_id = self.pds.lines.loc[line, 'to_bus']
+                self.model.st(rsome.rsocone(self.x['p'][line, t] + self.x['q'][line, t],
                                             self.x['v'][b_id, t],
-                                            self.x['I'][l, t]))
+                                            self.x['I'][line, t]))
 
     def solve(self):
-        self.model.solve(display=False)
+        self.model.solve(grb, display=True)
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
 
@@ -119,13 +117,12 @@ class Opt:
         return {t: round(val, dec) for t, val in values.items()}
 
     def plot_results(self, t, net_coords):
-        f = 1 / self.pds.nominal_voltage_kv
-        nodes_vals = self.extract_results(x='v', elem_type='nodes', series_type='elements', t_idx=0, dec=2, factor=f)
-        edges_vals = self.extract_results(x='p', elem_type='lines', series_type='elements', t_idx=0)
-        gr = graphs.OptGraphs(self.pds)
-        gr.pds_graph(edges_values=edges_vals, nodes_values=nodes_vals, net_coords=net_coords)
-
-        graphs.time_series(x=range(self.T), y=self.x['gen_p'].get()[t, :])
+        n_vals = self.extract_results('v', elem_type='nodes', series_type='elements', t_idx=0, dec=2)
+        e_vals = self.extract_results('p', elem_type='lines', series_type='elements', t_idx=0, factor=self.pds.pu_to_kw)
+        gr = graphs.OptGraphs(self.pds, self.x)
+        gr.pds_graph(edges_values=e_vals, nodes_values=n_vals, net_coords=net_coords)
+        gr.bus_voltage(t=0)
+        graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[t, :] * self.pds.pu_to_kw)
 
 
 if __name__ == "__main__":
