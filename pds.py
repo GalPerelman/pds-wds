@@ -15,23 +15,40 @@ class PDS:
         self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)
         self.grid_tariff = pd.read_csv(os.path.join(self.data_folder, 'grid_tariff.csv'), index_col=0)
 
-        self.n_bus = len(self.bus)
-        self.n_lines = len(self.lines)
-        self.n_psh = len(self.psh)
-
-        self.convert_resistance_units()
-        self.gen_idx = np.where(self.bus['type'] == 'gen', 1, 0)
-        self.gen_mat = self.gen_idx * np.eye(self.n_bus)
-        self.A = self.get_connectivity_mat()
-
         # read other parameters
         with open(os.path.join(self.data_folder, 'params.yaml'), 'r') as f:
             params = yaml.safe_load(f)
             self.__dict__.update(params)
 
-    def convert_resistance_units(self):
-        self.lines['r_kohm'] = self.lines['r_ohm'] / 1000
-        self.lines['x_kohm'] = self.lines['x_ohm'] / 1000
+        self.n_bus = len(self.bus)
+        self.n_lines = len(self.lines)
+        self.n_psh = len(self.psh)
+
+        self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
+        self.factorize_demands()
+
+        self.gen_idx = np.where(self.bus['type'] == 'gen', 1, 0)
+        self.gen_mat = self.gen_idx * np.eye(self.n_bus)
+        self.A = self.get_connectivity_mat()
+
+    def factorize_demands(self):
+        try:
+            self.dem_active *= self.active_demand_factor
+        except AttributeError:
+            pass
+
+        try:
+            self.dem_reactive *= self.reactive_demand_factor
+        except AttributeError:
+            pass
+
+    def convert_to_pu(self):
+        z = ((self.nominal_voltage_kv * 1000) ** 2) / (self.power_base_mva * 10 ** 6)
+        self.lines['r_pu'] = self.lines['r_ohm'] / z
+        self.lines['x_pu'] = self.lines['x_ohm'] / z
+        self.dem_active = (self.dem_active * 1000) / (self.power_base_mva * 10 ** 6)
+        self.dem_reactive = (self.dem_reactive * 1000) / (self.power_base_mva * 10 ** 6)
+        return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
     def get_bus_lines(self, bus_id):
         return self.lines.loc[(self.lines['from_bus'] == bus_id) | (self.lines['to_bus'] == bus_id)]
