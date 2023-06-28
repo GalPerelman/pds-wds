@@ -3,12 +3,10 @@ import os
 import rsome
 from rsome import ro
 from rsome import grb_solver as grb
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
-import opt
 import graphs
+import utils
 from pds import PDS
 from wds import WDS
 
@@ -32,15 +30,15 @@ class Opt:
         return pds, wds
 
     def declare_vars(self):
-        gen_p = self.model.dvar((self.pds.n_bus, self.T))
-        gen_q = self.model.dvar((self.pds.n_bus, self.T))
+        gen_p = self.model.dvar((self.pds.n_bus, self.T))  # active power generation
+        gen_q = self.model.dvar((self.pds.n_bus, self.T))  # reactive power generation
         psh_y = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower injection
         psh_h = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower consumption
 
-        v = self.model.dvar((self.pds.n_bus, self.T))  # buses voltage
+        v = self.model.dvar((self.pds.n_bus, self.T))  # buses squared voltage
         I = self.model.dvar((self.pds.n_lines, self.T))  # lines squared current flow
-        p = self.model.dvar((self.pds.n_lines, self.T))  # active power flow from\to bus
-        q = self.model.dvar((self.pds.n_lines, self.T))  # reactive power flow from\to bus
+        p = self.model.dvar((self.pds.n_lines, self.T))  # lines active power flow
+        q = self.model.dvar((self.pds.n_lines, self.T))  # lines reactive power flow
 
         self.model.st(gen_p >= 0)
         self.model.st(gen_q >= 0)
@@ -48,8 +46,12 @@ class Opt:
         self.model.st(psh_h >= 0)
         self.model.st(I >= 0)
 
-        pump_p = self.model.dvar((self.wds.n_pumps, self.T))
-        return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q}
+        f = self.model.dvar((self.wds.n_pipes, self.T))  # pipe flows
+        h = self.model.dvar((self.wds.n_nodes, self.T))  # nodes head
+        pf = self.model.dvar((self.wds.n_pumps, self.T))  # pump flows
+
+        return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
+                'f': f, 'h': h, 'pf': pf}
 
     def build(self):
         self.objective_func()
@@ -59,14 +61,15 @@ class Opt:
         self.power_flow_constraint()
 
     def objective_func(self):
-        self.model.min((self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-                       + (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
-                       )
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
+        wds_cost = 0
+        psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
+        self.model.min(pds_cost + wds_cost + psh_cost)
 
     def bus_balance(self):
-        r = self.pds.bus_lines_mat(direction='in', param='r_pu')
-        x = self.pds.bus_lines_mat(direction='in', param='x_pu')
-        a = self.pds.bus_lines_mat()
+        r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='r_pu')
+        x = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='x_pu')
+        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
                       - r @ self.x['I']
@@ -83,7 +86,7 @@ class Opt:
     def energy_conservation(self):
         r = self.pds.lines['r_pu'].values.reshape(1, -1)
         x = self.pds.lines['x_pu'].values.reshape(1, -1)
-        a = self.pds.bus_lines_mat()
+        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
         self.model.st(a.T @ self.x['v']
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T
@@ -101,12 +104,15 @@ class Opt:
                                             self.x['v'][b_id, t],
                                             self.x['I'][line, t]))
 
+    def water_mass_balance(self):
+        pass
+
     def solve(self):
         self.model.solve(grb, display=True)
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
 
-    def extract_results(self, x, elem_type, series_type='time', elem_idx=None, t_idx=None, dec=1, factor=1):
+    def extract_res(self, x, elem_type, series_type='time', elem_idx=None, t_idx=None, dec=1, factor=1):
         n = {'nodes': self.pds.n_bus, 'lines': self.pds.n_lines}
         if series_type == 'time':
             values = {t: self.x[x].get()[elem_idx, t] * factor for t in range(self.T)}
@@ -117,8 +123,8 @@ class Opt:
         return {t: round(val, dec) for t, val in values.items()}
 
     def plot_results(self, t, net_coords):
-        n_vals = self.extract_results('v', elem_type='nodes', series_type='elements', t_idx=0, dec=2)
-        e_vals = self.extract_results('p', elem_type='lines', series_type='elements', t_idx=0, factor=self.pds.pu_to_kw)
+        n_vals = self.extract_res('v', elem_type='nodes', series_type='elements', t_idx=0, dec=2)
+        e_vals = self.extract_res('p', elem_type='lines', series_type='elements', t_idx=0, factor=self.pds.pu_to_kw)
         gr = graphs.OptGraphs(self.pds, self.x)
         gr.pds_graph(edges_values=e_vals, nodes_values=n_vals, net_coords=net_coords)
         gr.bus_voltage(t=0)
