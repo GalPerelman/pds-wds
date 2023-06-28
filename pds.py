@@ -65,18 +65,4 @@ class PDS:
 
         mat[start_indices, end_indices] = mat_values
         return mat
-
-    def bus_lines_mat(self, direction='both', param=''):
-        mat = np.zeros((self.n_bus, self.n_lines))
-        mat[self.lines.loc[:, 'from_bus'], np.arange(self.n_lines)] = -1
-        mat[self.lines.loc[:, 'to_bus'], np.arange(self.n_lines)] = 1
-
-        if direction == 'in':
-            mat[mat == -1] = 0
-        if direction == 'out':
-            mat[mat == 1] = 0
-
-        if param:
-            # row-wise multiplication
-            mat = mat * self.lines[param].values
-        return mat
+    
