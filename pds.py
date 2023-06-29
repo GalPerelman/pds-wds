@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import yaml
 
+import utils
+
 
 class PDS:
     def __init__(self, data_folder):
@@ -26,10 +28,7 @@ class PDS:
 
         self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
         self.factorize_demands()
-
-        self.gen_idx = np.where(self.bus['type'] == 'gen', 1, 0)
-        self.gen_mat = self.gen_idx * np.eye(self.n_bus)
-        self.A = self.get_connectivity_mat()
+        self.gen_mat = utils.get_mat_for_node_type(self.bus, "gen")
 
     def factorize_demands(self):
         try:
@@ -65,4 +64,3 @@ class PDS:
 
         mat[start_indices, end_indices] = mat_values
         return mat
-    
