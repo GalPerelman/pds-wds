@@ -1,5 +1,6 @@
 import os
-
+import code
+import numpy as np
 import rsome
 from rsome import ro
 from rsome import grb_solver as grb
@@ -46,12 +47,13 @@ class Opt:
         self.model.st(psh_h >= 0)
         self.model.st(I >= 0)
 
+        vol = self.model.dvar((self.wds.n_tanks, self.T))  # tanks volume
         f = self.model.dvar((self.wds.n_pipes, self.T))  # pipe flows
         h = self.model.dvar((self.wds.n_nodes, self.T))  # nodes head
         pf = self.model.dvar((self.wds.n_pumps, self.T))  # pump flows
 
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
-                'f': f, 'h': h, 'pf': pf}
+                'vol': vol, 'f': f, 'h': h, 'pf': pf}
 
     def build(self):
         self.objective_func()
@@ -59,6 +61,7 @@ class Opt:
         self.energy_conservation()
         self.voltage_bounds()
         self.power_flow_constraint()
+        self.water_mass_balance()
 
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
@@ -105,7 +108,22 @@ class Opt:
                                             self.x['I'][line, t]))
 
     def water_mass_balance(self):
-        pass
+        not_source = utils.get_mat_for_node_type(self.wds.nodes, 'reservoir', inverse=True)  # all but reservoirs
+        a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
+
+        tanks_mat = utils.get_mat_for_node_type(self.wds.nodes, 'tank')
+        # rows - all nodes. columns - only tanks
+        # tanks_mat @ x_volume results in a matrix with the desired shape
+        tanks_mat = tanks_mat[:, ~np.all(tanks_mat == 0, axis=0)]
+
+        dt = utils.get_dt_mat(self.T)
+        init_vol = np.zeros((self.wds.n_tanks, self.T))
+        init_vol[:, 0] = self.wds.tanks['init_vol'].values
+        init_vol = tanks_mat @ init_vol
+
+        self.model.st(not_source @ a @ self.x['f']
+                      - ((tanks_mat @ self.x['vol']) @ dt) + init_vol
+                      - self.wds.demands.values == 0)
 
     def solve(self):
         self.model.solve(grb, display=True)
@@ -138,4 +156,5 @@ if __name__ == "__main__":
     opt.solve()
     opt.plot_results(t=0, net_coords=graphs.IEEE33_POS)
 
-    plt.show()
+    print(opt.x['f'].get()[:, 0])
+    code.interact(local=locals())

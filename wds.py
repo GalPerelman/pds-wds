@@ -11,10 +11,13 @@ class WDS:
         self.nodes = pd.read_csv(os.path.join(self.data_folder, 'nodes.csv'), index_col=0)
         self.pipes = pd.read_csv(os.path.join(self.data_folder, 'pipes.csv'), index_col=0)
         self.pumps = pd.read_csv(os.path.join(self.data_folder, 'pumps.csv'), index_col=0)
+        self.tanks = pd.read_csv(os.path.join(self.data_folder, 'tanks.csv'), index_col=0)
+        self.demands = pd.read_csv(os.path.join(self.data_folder, 'demands.csv'), index_col=0).T  # index=nodes
 
         self.n_nodes = len(self.nodes)
         self.n_pipes = len(self.pipes)
         self.n_pumps = len(self.pumps)
+        self.n_tanks = len(self.tanks)
 
         self.hw = 120
         self.get_pipes_resistance()
