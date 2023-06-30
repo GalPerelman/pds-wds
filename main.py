@@ -65,7 +65,7 @@ class Opt:
 
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-        wds_cost = 0
+        wds_cost = self.x['f'][0, :] @ self.wds.tariffs.sum(axis=1).values
         psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
         self.model.min(pds_cost + wds_cost + psh_cost)
 
@@ -125,6 +125,9 @@ class Opt:
                       - ((tanks_mat @ self.x['vol']) @ dt) + init_vol
                       - self.wds.demands.values == 0)
 
+        self.model.st(self.x['vol'] <= self.wds.tanks['max_vol'].values.reshape(-1, 1))
+        self.model.st(self.x['vol'] >= self.wds.tanks['min_vol'].values.reshape(-1, 1))
+
     def solve(self):
         self.model.solve(grb, display=True)
         obj, status = self.model.solution.objval, self.model.solution.status
@@ -140,13 +143,20 @@ class Opt:
 
         return {t: round(val, dec) for t, val in values.items()}
 
-    def plot_results(self, t, net_coords):
+    def plot_results(self, t):
         n_vals = self.extract_res('v', elem_type='nodes', series_type='elements', t_idx=0, dec=2)
         e_vals = self.extract_res('p', elem_type='lines', series_type='elements', t_idx=0, factor=self.pds.pu_to_kw)
         gr = graphs.OptGraphs(self.pds, self.x)
-        gr.pds_graph(edges_values=e_vals, nodes_values=n_vals, net_coords=net_coords)
+        gr.plot_graph(self.pds.lines, coords=self.pds.coords, from_col='from_bus', to_col='to_bus',
+                      edges_values=e_vals, nodes_values=n_vals)
+
+        gr.plot_graph(self.wds.pipes, coords=self.wds.coords, from_col='from_node', to_col='to_node',
+                      edges_values={i: self.x['f'].get()[i, 0] for i in range(self.wds.n_pipes)})
+
         gr.bus_voltage(t=0)
-        graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[t, :] * self.pds.pu_to_kw)
+        graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
+        graphs.time_series(x=range(self.T), y=self.x['f'].get()[0, :], ylabel='pipe 0 flow')
+        graphs.time_series(x=range(self.T), y=self.x['vol'].get()[0, :], ylabel='tank 0 vol')
 
 
 if __name__ == "__main__":
@@ -154,7 +164,8 @@ if __name__ == "__main__":
     WDS_DATA = os.path.join('data', 'wds')
     opt = Opt(pds_data=PDS_DATA, wds_data=WDS_DATA, T=24)
     opt.solve()
-    opt.plot_results(t=0, net_coords=graphs.IEEE33_POS)
+    opt.plot_results(t=0)
 
-    print(opt.x['f'].get()[:, 0])
-    code.interact(local=locals())
+    print(opt.x['vol'].get())
+    # code.interact(local=locals())
+    plt.show()
