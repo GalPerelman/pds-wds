@@ -25,6 +25,7 @@ def get_mat_for_node_type(nodes_data: pd.DataFrame, node_type: str, inverse=Fals
     """
     generate a matrix that can be multiplied by nodes vector to get nodes of certain type
     returns a NxN matrix that is based on an eye matrix where only nodes from the requested type are 1
+    inverse - to return all nodes beside the input type
     """
     idx = np.where(nodes_data['type'] == node_type, 1, 0)
     if inverse:
@@ -41,5 +42,5 @@ def get_dt_mat(n):
     for example, change in tank volume: dv = v2 - v1
     if dv is positive (v2 > v1) water flow from the network into the tank and vice versa
     """
-    mat = np.eye(n, k=0)[:-1] - np.eye(n, k=1)[:-1]
+    mat = np.eye(n, k=0) - np.eye(n, k=1)
     return mat
