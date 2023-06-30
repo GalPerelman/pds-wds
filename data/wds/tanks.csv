@@ -1,2 +1,3 @@
-﻿tank,init_vol,target_vol,max_vol,max_flow
-T1,1200,1200,9000,1080
+﻿tank_node,init_vol,target_vol,max_vol,max_flow
+13,1200,1200,9000,1080
+15,1000,0,5000,2000
