@@ -34,11 +34,10 @@ class WDS:
     @staticmethod
     def hazen_wiliams(c, d, l):
         """
-
-        :param c: roughness: (dimensionless)
-        :param d: diamater: (m)
-        :param l: length: (m)
-        :return: head loss (m) coefficient
+        c: roughness: (dimensionless)
+        d: diamater: (m)
+        l: length: (m)
+        return: head loss (m) coefficient
         """
         return (1.1311 * 10 ** 9) * ((1 / c) ** 1.852) * ((d * 1000) ** -4.87) * l
 
