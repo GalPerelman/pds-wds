@@ -21,18 +21,21 @@ def get_connectivity_mat(edges_data: pd.DataFrame, from_col: str = 'from', to_co
     return mat
 
 
-def get_mat_for_node_type(nodes_data: pd.DataFrame, node_type: str, inverse=False):
+def get_mat_for_type(data: pd.DataFrame, element_type: str, inverse=False):
     """
-    generate a matrix that can be multiplied by nodes vector to get nodes of certain type
-    returns a NxN matrix that is based on an eye matrix where only nodes from the requested type are 1
-    inverse - to return all nodes beside the input type
+    generate a matrix that can be multiplied by nodes / edges vector to get nodes / edges of certain type
+    returns a NxN matrix that is based on an eye matrix where only nodes / edges from the requested type are 1
+    N is the number of nodes / edges
+    inverse - to return all nodes /edges beside the input type
+
+    data: pd.DataFrame - probably one of: wds.nodes, wds.pipes, pds.bus, pds.lines
     """
-    idx = np.where(nodes_data['type'] == node_type, 1, 0)
+    idx = np.where(data['type'] == element_type, 1, 0)
     if inverse:
         # to get a matrix of all types but the input one
         idx = np.logical_not(idx)
 
-    mat = idx * np.eye(len(nodes_data))
+    mat = idx * np.eye(len(data))
     return mat
 
 

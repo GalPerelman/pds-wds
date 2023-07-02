@@ -28,7 +28,7 @@ class PDS:
 
         self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
         self.factorize_demands()
-        self.gen_mat = utils.get_mat_for_node_type(self.bus, "gen")
+        self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
 
     def factorize_demands(self):
         try:
