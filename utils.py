@@ -47,3 +47,9 @@ def get_dt_mat(n):
     """
     mat = np.eye(n, k=0) - np.eye(n, k=1)
     return mat
+
+
+def linear_coefficients_from_two_pints(p1, p2):
+    a = (p2[1] - p1[1]) / (p2[0] - p1[0])
+    b = p1[1] - a * p1[0]
+    return a, b
