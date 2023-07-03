@@ -80,3 +80,7 @@ class WDS:
             pipes_pl[pipe_id] = self.pipes_piecewise_linear(n=4, d=row['diameter_m']*1000, r=row['R'])
 
         return pipes_pl
+
+    def tank_vol_to_level(self, tank_idx, vol):
+        diameter = self.tanks.loc[tank_idx, 'diameter']
+        return (4 * vol) / (np.pi * diameter ** 2)
