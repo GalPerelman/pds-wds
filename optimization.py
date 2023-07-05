@@ -10,31 +10,34 @@ from wds import WDS
 
 
 class Opt:
-    def __init__(self, pds_data: str, wds_data: str, T: int):
+    def __init__(self, pds_data: str, wds_data: str, t: int, n: int):
         self.pds_data = pds_data
         self.wds_data = wds_data
-        self.T = T
+        self.t = t
+        self.n = n                 # number of breakpoints for piecewise linearization
+        self.M = self.n - 1        # number of piecewise linear segments
 
         self.pds, self.wds = self.init_distribution_systems()
         self.model = ro.Model()
         self.x = self.declare_vars()
+        self.alpha_mat = self.build_piecewise_matrices()
         self.build()
 
     def init_distribution_systems(self):
         pds = PDS(self.pds_data)
-        wds = WDS(self.wds_data)
+        wds = WDS(self.wds_data, self.n)
         return pds, wds
 
     def declare_vars(self):
-        gen_p = self.model.dvar((self.pds.n_bus, self.T))  # active power generation
-        gen_q = self.model.dvar((self.pds.n_bus, self.T))  # reactive power generation
-        psh_y = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower injection
-        psh_h = self.model.dvar((self.pds.n_psh, self.T))  # psh_y = pumped storage hydropower consumption
+        gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
+        gen_q = self.model.dvar((self.pds.n_bus, self.t))  # reactive power generation
+        psh_y = self.model.dvar((self.pds.n_psh, self.t))  # psh_y = pumped storage hydropower injection
+        psh_h = self.model.dvar((self.pds.n_psh, self.t))  # psh_y = pumped storage hydropower consumption
 
-        v = self.model.dvar((self.pds.n_bus, self.T))  # buses squared voltage
-        I = self.model.dvar((self.pds.n_lines, self.T))  # lines squared current flow
-        p = self.model.dvar((self.pds.n_lines, self.T))  # lines active power flow
-        q = self.model.dvar((self.pds.n_lines, self.T))  # lines reactive power flow
+        v = self.model.dvar((self.pds.n_bus, self.t))  # buses squared voltage
+        I = self.model.dvar((self.pds.n_lines, self.t))  # lines squared current flow
+        p = self.model.dvar((self.pds.n_lines, self.t))  # lines active power flow
+        q = self.model.dvar((self.pds.n_lines, self.t))  # lines reactive power flow
 
         self.model.st(gen_p >= 0)
         self.model.st(gen_q >= 0)
@@ -42,15 +45,19 @@ class Opt:
         self.model.st(psh_h >= 0)
         self.model.st(I >= 0)
 
-        vol = self.model.dvar((self.wds.n_tanks, self.T))  # tanks volume
-        f = self.model.dvar((self.wds.n_pipes, self.T))  # pipe flows
-        h = self.model.dvar((self.wds.n_nodes, self.T))  # nodes head
-        pf = self.model.dvar((self.wds.n_pumps, self.T))  # pump flows
+        alpha = self.model.dvar((self.wds.n_pipes, self.t, self.n))  # pipe segments relative flows
+        beta = self.model.dvar((self.wds.n_pipes, self.t, self.M), vtype='B')
+        h = self.model.dvar((self.wds.n_nodes, self.t))  # nodes head
+        pf = self.model.dvar((self.wds.n_pumps, self.t))  # pump flows
+        vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
 
-        self.model.st(h >= 0)
+        self.model.st(alpha <= 1)
+        self.model.st(alpha >= 0)
+        self.model.st(alpha.sum(axis=-1) == 1)
+        self.model.st(beta.sum(axis=-1) == 1)
 
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
-                'vol': vol, 'f': f, 'h': h, 'pf': pf}
+                'vol': vol, 'alpha': alpha, 'h': h, 'pf': pf, 'beta': beta}
 
     def build(self):
         self.objective_func()
@@ -60,10 +67,23 @@ class Opt:
         self.power_flow_constraint()
         self.water_mass_balance()
         self.no_pumps_backflow()
+        self.head_boundaries()
+        # self.head_conservation()
+
+    def build_piecewise_matrices(self):
+        mat = np.zeros((self.wds.n_pipes, self.t, self.n))
+        for p in self.wds.pipes.index:
+            for segment in range(self.M):
+                mat[p, :, segment] = self.wds.pipes_pl[p][segment]['start'][0]
+
+            # populate the last breakpoint by the end of the last segment
+            mat[p, :, self.M] = self.wds.pipes_pl[p][self.M-1]['end'][0]
+
+        return mat
 
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-        wds_cost = self.x['f'][0, :] @ self.wds.tariffs.sum(axis=1).values
+        wds_cost = (self.x['alpha'] * self.alpha_mat)[0, :, :].sum(axis=-1) @ self.wds.tariffs.sum(axis=1).values
         psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
         self.model.min(pds_cost + wds_cost + psh_cost)
 
@@ -100,7 +120,7 @@ class Opt:
         self.model.st(self.pds.bus['Vmin_pu'].values.reshape(-1, 1) - self.x['v'] <= 0)
 
     def power_flow_constraint(self):
-        for t in range(self.T):
+        for t in range(self.t):
             for line in range(self.pds.n_lines):
                 b_id = self.pds.lines.loc[line, 'to_bus']
                 self.model.st(rsome.rsocone(self.x['p'][line, t] + self.x['q'][line, t],
@@ -116,12 +136,12 @@ class Opt:
         # tanks_mat @ x_volume results in a matrix with the desired shape
         tanks_mat = tanks_mat[:, ~np.all(tanks_mat == 0, axis=0)]
 
-        dt = utils.get_dt_mat(self.T)
-        init_vol = np.zeros((self.wds.n_tanks, self.T))
+        dt = utils.get_dt_mat(self.t)
+        init_vol = np.zeros((self.wds.n_tanks, self.t))
         init_vol[:, 0] = self.wds.tanks['init_vol'].values
         init_vol = tanks_mat @ init_vol
 
-        self.model.st(not_source @ a @ self.x['f']
+        self.model.st(not_source @ a @ ((self.alpha_mat * self.x['alpha']).sum(axis=-1))
                       - ((tanks_mat @ self.x['vol']) @ dt) + init_vol
                       - self.wds.demands.values == 0)
 
@@ -129,8 +149,18 @@ class Opt:
         self.model.st(self.x['vol'] >= self.wds.tanks['min_vol'].values.reshape(-1, 1))
 
     def no_pumps_backflow(self):
-        a = utils.get_mat_for_type(self.wds.pipes, 'pump')
-        self.model.st(a @ self.x['f'] >= 0)
+        pumps_idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'pump'].index
+        self.model.st(self.x['alpha'][pumps_idx, :] >= 0)
+
+    def head_boundaries(self):
+        self.model.st(self.x['h'] >= self.wds.nodes['elevation'].values.reshape(-1, 1))
+
+        res_idx = self.wds.nodes.loc[self.wds.nodes['type'] == 'reservoir'].index
+        self.model.st(self.x['h'][res_idx, :] == self.wds.nodes.loc[res_idx, 'elevation'].values.reshape(-1, 1))
+
+    def head_conservation(self):
+        """ to do """
+        pass
 
     def solve(self):
         self.model.solve(grb, display=True)
@@ -140,7 +170,7 @@ class Opt:
     def extract_res(self, x, elem_type, series_type='time', elem_idx=None, t_idx=None, dec=1, factor=1):
         n = {'nodes': self.pds.n_bus, 'lines': self.pds.n_lines}
         if series_type == 'time':
-            values = {t: self.x[x].get()[elem_idx, t] * factor for t in range(self.T)}
+            values = {t: self.x[x].get()[elem_idx, t] * factor for t in range(self.t)}
 
         if series_type == 'elements':
             values = {i: self.x[x].get()[i, t_idx] * factor for i in range(n[elem_type])}
@@ -155,11 +185,13 @@ class Opt:
                       edges_values=e_vals, nodes_values=n_vals)
 
         gr.plot_graph(self.wds.pipes, coords=self.wds.coords, from_col='from_node', to_col='to_node',
-                      edges_values={i: self.x['f'].get()[i, 0] for i in range(self.wds.n_pipes)},
+                      edges_values={i: (self.x['alpha'].get() * self.alpha_mat).sum(axis=-1)[i, 0]
+                                    for i in range(self.wds.n_pipes)},
                       nodes_values={i: round(self.x['h'].get()[i, 0], 1) for i in range(self.wds.n_nodes)}
                       )
 
         gr.bus_voltage(t=0)
         graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
-        graphs.time_series(x=range(self.T), y=self.x['f'].get()[0, :], ylabel='pipe 0 flow')
-        graphs.time_series(x=range(self.T), y=self.x['vol'].get()[0, :], ylabel='tank 0 vol')
+        graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.alpha_mat).sum(axis=-1)[0, :],
+                           ylabel='pipe 0 flow')
+        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[0, :], ylabel='tank 0 vol')
