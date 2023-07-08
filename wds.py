@@ -65,7 +65,7 @@ class WDS:
             if row['type'] == 'pipe':
                 x = np.linspace(-row['max_flow_cmh'], row['max_flow_cmh'], self.n)
                 y = -row['R'] * x * (np.abs(x)) ** 0.852
-            if row['type'] == 'pump' or row['type'] == 'turbine':
+            if row['type'] == 'pump':
                 a = self.pumps.loc[pipe_id, 'a']
                 b = self.pumps.loc[pipe_id, 'b']
                 x = np.linspace(0,  row['max_flow_cmh'], self.n)

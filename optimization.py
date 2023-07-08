@@ -14,8 +14,8 @@ class Opt:
         self.pds_data = pds_data
         self.wds_data = wds_data
         self.t = t
-        self.n = n                 # number of breakpoints for piecewise linearization
-        self.M = self.n - 1        # number of piecewise linear segments
+        self.n = n  # number of breakpoints for piecewise linearization
+        self.M = self.n - 1  # number of piecewise linear segments
 
         self.pds, self.wds = self.init_distribution_systems()
         self.model = ro.Model()
@@ -86,7 +86,7 @@ class Opt:
                 y_mat[p, :, segment] = self.wds.pipes_pl[p][segment]['start'][1]
 
             # populate the last breakpoint by the end of the last segment
-            x_mat[p, :, self.M] = self.wds.pipes_pl[p][self.M-1]['end'][0]
+            x_mat[p, :, self.M] = self.wds.pipes_pl[p][self.M - 1]['end'][0]
             y_mat[p, :, self.M] = self.wds.pipes_pl[p][self.M - 1]['end'][1]
 
         return x_mat, y_mat
@@ -170,8 +170,11 @@ class Opt:
 
     def head_conservation(self):
         a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
-        self.model.st(a.T @ self.x['h'] - ((self.pl_y_mat * self.x['alpha']).sum(axis=-1)) == 0)
+        # exclude turbines from headloss constraint
+        b = utils.get_mat_for_type(data=self.wds.pipes, element_type='turbine', inverse=True)
+        bb = np.tensordot(b, self.pl_y_mat, axes=([1], [0]))
 
+        self.model.st((a @ b).T @ self.x['h'] - ((bb * self.x['alpha']).sum(axis=-1)) == 0)
 
     def solve(self):
         self.model.solve(grb, display=True)
@@ -205,4 +208,5 @@ class Opt:
         graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
         graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.pl_x_mat).sum(axis=-1)[0, :],
                            ylabel='pipe 0 flow')
-        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[0, :], ylabel='tank 0 vol')
+        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[1, :], ylabel='tank vol')
+        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[2, :], ylabel='PSH vol')
