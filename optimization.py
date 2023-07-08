@@ -20,8 +20,8 @@ class Opt:
         self.pds, self.wds = self.init_distribution_systems()
         self.model = ro.Model()
         self.x = self.declare_vars()
-        self.alpha_mat = self.build_piecewise_matrices()
-        self.build()
+        self.pl_x_mat, self.pl_y_mat = self.build_piecewise_matrices()
+        self.build_opt_problem()
 
     def init_distribution_systems(self):
         pds = PDS(self.pds_data)
@@ -56,10 +56,16 @@ class Opt:
         self.model.st(alpha.sum(axis=-1) == 1)
         self.model.st(beta.sum(axis=-1) == 1)
 
+        # piecewise linear constraints
+        mat = np.zeros((self.n - 1, self.n))
+        np.fill_diagonal(mat, 1)
+        np.fill_diagonal(mat[:, 1:], 1)
+        self.model.st(alpha - beta @ mat <= 0)
+
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
                 'vol': vol, 'alpha': alpha, 'h': h, 'pf': pf, 'beta': beta}
 
-    def build(self):
+    def build_opt_problem(self):
         self.objective_func()
         self.bus_balance()
         self.energy_conservation()
@@ -68,22 +74,26 @@ class Opt:
         self.water_mass_balance()
         self.no_pumps_backflow()
         self.head_boundaries()
-        # self.head_conservation()
+        self.head_conservation()
 
     def build_piecewise_matrices(self):
-        mat = np.zeros((self.wds.n_pipes, self.t, self.n))
+        """ Build matrices of the x, and y values at the piecewise linear breakpoints """
+        x_mat = np.zeros((self.wds.n_pipes, self.t, self.n))
+        y_mat = np.zeros((self.wds.n_pipes, self.t, self.n))
         for p in self.wds.pipes.index:
             for segment in range(self.M):
-                mat[p, :, segment] = self.wds.pipes_pl[p][segment]['start'][0]
+                x_mat[p, :, segment] = self.wds.pipes_pl[p][segment]['start'][0]
+                y_mat[p, :, segment] = self.wds.pipes_pl[p][segment]['start'][1]
 
             # populate the last breakpoint by the end of the last segment
-            mat[p, :, self.M] = self.wds.pipes_pl[p][self.M-1]['end'][0]
+            x_mat[p, :, self.M] = self.wds.pipes_pl[p][self.M-1]['end'][0]
+            y_mat[p, :, self.M] = self.wds.pipes_pl[p][self.M - 1]['end'][1]
 
-        return mat
+        return x_mat, y_mat
 
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-        wds_cost = (self.x['alpha'] * self.alpha_mat)[0, :, :].sum(axis=-1) @ self.wds.tariffs.sum(axis=1).values
+        wds_cost = (self.x['alpha'] * self.pl_x_mat)[0, :, :].sum(axis=-1) @ self.wds.tariffs.sum(axis=1).values
         psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
         self.model.min(pds_cost + wds_cost + psh_cost)
 
@@ -141,7 +151,7 @@ class Opt:
         init_vol[:, 0] = self.wds.tanks['init_vol'].values
         init_vol = tanks_mat @ init_vol
 
-        self.model.st(not_source @ a @ ((self.alpha_mat * self.x['alpha']).sum(axis=-1))
+        self.model.st(not_source @ a @ ((self.pl_x_mat * self.x['alpha']).sum(axis=-1))
                       - ((tanks_mat @ self.x['vol']) @ dt) + init_vol
                       - self.wds.demands.values == 0)
 
@@ -159,8 +169,9 @@ class Opt:
         self.model.st(self.x['h'][res_idx, :] == self.wds.nodes.loc[res_idx, 'elevation'].values.reshape(-1, 1))
 
     def head_conservation(self):
-        """ to do """
-        pass
+        a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
+        self.model.st(a.T @ self.x['h'] - ((self.pl_y_mat * self.x['alpha']).sum(axis=-1)) == 0)
+
 
     def solve(self):
         self.model.solve(grb, display=True)
@@ -185,13 +196,13 @@ class Opt:
                       edges_values=e_vals, nodes_values=n_vals)
 
         gr.plot_graph(self.wds.pipes, coords=self.wds.coords, from_col='from_node', to_col='to_node',
-                      edges_values={i: (self.x['alpha'].get() * self.alpha_mat).sum(axis=-1)[i, 0]
+                      edges_values={i: (self.x['alpha'].get() * self.pl_x_mat).sum(axis=-1)[i, 0]
                                     for i in range(self.wds.n_pipes)},
                       nodes_values={i: round(self.x['h'].get()[i, 0], 1) for i in range(self.wds.n_nodes)}
                       )
 
         gr.bus_voltage(t=0)
         graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
-        graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.alpha_mat).sum(axis=-1)[0, :],
+        graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.pl_x_mat).sum(axis=-1)[0, :],
                            ylabel='pipe 0 flow')
         graphs.time_series(x=range(self.t), y=self.x['vol'].get()[0, :], ylabel='tank 0 vol')
