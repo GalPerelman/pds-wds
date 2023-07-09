@@ -22,6 +22,7 @@ class Opt:
         self.x = self.declare_vars()
         self.pl_flow_mat = self.build_piecewise_matrices('flow')
         self.pl_head_mat = self.build_piecewise_matrices('head')
+        self.pl_power_mat = self.build_piecewise_matrices('power')
         self.build_opt_problem()
 
     def init_distribution_systems(self):
@@ -88,7 +89,9 @@ class Opt:
 
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-        wds_cost = (self.x['alpha'] * self.pl_flow_mat)[0, :, :].sum(axis=-1) @ self.wds.tariffs.sum(axis=1).values
+        pumps = self.pumps_power().sum(axis=0)
+        turbine = self.turbine_power().sum(axis=0)
+        wds_cost = sum((pumps - turbine) @ self.wds.tariffs.sum(axis=1).values)
         psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
         self.model.min(pds_cost + wds_cost + psh_cost)
 
@@ -164,12 +167,26 @@ class Opt:
         self.model.st(self.x['h'][res_idx, :] == self.wds.nodes.loc[res_idx, 'elevation'].values.reshape(-1, 1))
 
     def head_conservation(self):
+        """
+        numpy allows for "broadcasting" matrix multiplication, to avoid loops
+        This will work when the n columns in the first matrix is equal to the n rows in the second matrix.
+        numpy has a function called tensordot that can perform the dot product over specified axes for arrays of
+        any dimensionality.
+        """
         a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
         # exclude turbines from headloss constraint
         b = utils.get_mat_for_type(data=self.wds.pipes, element_type='turbine', inverse=True)
         bb = np.tensordot(b, self.pl_head_mat, axes=([1], [0]))
 
         self.model.st((a @ b).T @ self.x['h'] - ((bb * self.x['alpha']).sum(axis=-1)) == 0)
+
+    def pumps_power(self):
+        idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'pump'].index
+        return (self.pl_power_mat[idx, :, :] * self.x['alpha'][idx, :, :]).sum(axis=-1)
+
+    def turbine_power(self):
+        idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'turbine'].index
+        return (self.pl_power_mat[idx, :, :] * self.x['alpha'][idx, :, :]).sum(axis=-1)
 
     def solve(self):
         self.model.solve(grb, display=True)
