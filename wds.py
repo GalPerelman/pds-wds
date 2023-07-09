@@ -59,6 +59,24 @@ class WDS:
         """
         self.pipes['R'] = self.hazen_wiliams(self.pipes['c'], self.pipes['diameter_m'], self.pipes['length_m'])
 
+    def get_pump_head(self, pump_id, flow):
+        a = - (self.pumps.loc[pump_id, 'h_nom']) / (3 * (self.pumps.loc[pump_id, 'q_nom']) ** 2)
+        h = a * (flow ** 2) + (4 / 3) * (self.pumps.loc[pump_id, 'h_nom'])
+        return h
+
+    def get_pump_power(self, pump_id, flow):
+        h = self.get_pump_head(pump_id, flow)
+
+        # build efficiency curve
+        a = - (self.pumps.loc[pump_id, 'e_nom']) / (self.pumps.loc[pump_id, 'q_nom'] ** 2)
+        b = 2 * (self.pumps.loc[pump_id, 'e_nom']) / (self.pumps.loc[pump_id, 'q_nom'])
+        eff = a * (flow ** 2) + b * flow
+
+        power = np.divide((9810 * (flow / 3600) * h), (1000 * eff),
+                          out=np.zeros_like((9810 * (flow / 3600) * h)), where=(1000 * eff) != 0)
+
+        return power
+
     def piecewise_linear(self):
         pipes_pl = {}
         for pipe_id, row in self.pipes.iterrows():
@@ -68,10 +86,11 @@ class WDS:
             if row['type'] == 'pump':
                 a = self.pumps.loc[pipe_id, 'a']
                 b = self.pumps.loc[pipe_id, 'b']
-                x = np.linspace(0,  row['max_flow_cmh'], self.n)
-                y = a - b * (x ** 2)
+                x = np.linspace(1,  row['max_flow_cmh'], self.n)
+                h = self.get_pump_head(pipe_id, x)
+                p = self.get_pump_power(pipe_id, x)
 
-            f = UnivariateSpline(x, y, k=1, s=0)
+            f = UnivariateSpline(x, h, k=1, s=0)
             pl = {}
             for i in range(len(x) - 1):
                 a, b = utils.linear_coefficients_from_two_pints((x[i], float(f(x[i]))), (x[i + 1], float(f(x[i + 1]))))
