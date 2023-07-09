@@ -194,7 +194,7 @@ class Opt:
     def plot_results(self, t):
         n_vals = self.extract_res('v', elem_type='nodes', series_type='elements', t_idx=0, dec=2)
         e_vals = self.extract_res('p', elem_type='lines', series_type='elements', t_idx=0, factor=self.pds.pu_to_kw)
-        gr = graphs.OptGraphs(self.pds, self.x)
+        gr = graphs.OptGraphs(self.pds, self.wds, self.x)
         gr.plot_graph(self.pds.lines, coords=self.pds.coords, from_col='from_bus', to_col='to_bus',
                       edges_values=e_vals, nodes_values=n_vals)
 
@@ -208,5 +208,4 @@ class Opt:
         graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
         graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.pl_x_mat).sum(axis=-1)[0, :],
                            ylabel='pipe 0 flow')
-        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[1, :], ylabel='tank vol')
-        graphs.time_series(x=range(self.t), y=self.x['vol'].get()[2, :], ylabel='PSH vol')
+        gr.plot_all_tanks()
