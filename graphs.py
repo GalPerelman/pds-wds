@@ -3,10 +3,11 @@ import networkx as nx
 
 
 class OptGraphs:
-    def __init__(self, pds, wds, x):
+    def __init__(self, opt, pds, wds):
+        self.opt = opt
         self.pds = pds
         self.wds = wds
-        self.x = x
+        self.x = self.opt.x
 
     def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}):
         df = edges_data.copy()
@@ -51,6 +52,15 @@ class OptGraphs:
         for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
             values = self.x['vol'].get()[i, :]
             axes[i] = time_series(x=range(len(values)), y=values, title=f'Tank {tank_id}', ax=axes[i])
+
+        plt.tight_layout()
+
+    def plot_all_pumps(self, ncols=3):
+        fig, axes = plt.subplots(nrows=len(self.wds.pumps) % ncols + 1, ncols=ncols, sharex=True, figsize=(8, 4))
+        axes = axes.ravel()
+        for i, (pump_id, row) in enumerate(self.wds.pumps.iterrows()):
+            values = (self.x['alpha'].get() * self.opt.pl_flow_mat).sum(axis=-1)[i, :]
+            axes[i] = time_series(x=range(len(values)), y=values, title=f'Pump {pump_id}', ax=axes[i])
 
         plt.tight_layout()
 

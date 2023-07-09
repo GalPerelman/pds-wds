@@ -206,19 +206,17 @@ class Opt:
     def plot_results(self, t):
         n_vals = self.extract_res('v', elem_type='nodes', series_type='elements', t_idx=t, dec=2)
         e_vals = self.extract_res('p', elem_type='lines', series_type='elements', t_idx=t, factor=self.pds.pu_to_kw)
-        gr = graphs.OptGraphs(self.pds, self.wds, self.x)
+        gr = graphs.OptGraphs(self, self.pds, self.wds)
         gr.plot_graph(self.pds.lines, coords=self.pds.coords, from_col='from_bus', to_col='to_bus',
                       edges_values=e_vals, nodes_values=n_vals)
 
         gr.plot_graph(self.wds.pipes, coords=self.wds.coords, from_col='from_node', to_col='to_node',
-                      edges_values={i: (self.x['alpha'].get() * self.pl_x_mat).sum(axis=-1)[i, t]
+                      edges_values={i: (self.x['alpha'].get() * self.pl_flow_mat).sum(axis=-1)[i, t]
 
                                     for i in range(self.wds.n_pipes)},
                       nodes_values={i: round(self.x['h'].get()[i, t], 1) for i in range(self.wds.n_nodes)}
                       )
 
         gr.bus_voltage(t=0)
-        graphs.time_series(x=self.pds.dem_active.columns, y=self.x['gen_p'].get()[0, :] * self.pds.pu_to_kw)
-        graphs.time_series(x=range(self.t), y=(self.x['alpha'].get() * self.pl_flow_mat).sum(axis=-1)[0, :],
-                           ylabel='pipe 0 flow')
         gr.plot_all_tanks()
+        gr.plot_all_pumps()
