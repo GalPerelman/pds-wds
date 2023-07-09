@@ -83,16 +83,17 @@ class WDS:
             if row['type'] == 'pipe':
                 x = np.linspace(-row['max_flow_cmh'], row['max_flow_cmh'], self.n)
                 h = -row['R'] * x * (np.abs(x)) ** 0.852
+                p = 0 * x
             if row['type'] == 'pump':
                 x = np.linspace(0,  row['max_flow_cmh'], self.n)
                 h = self.get_pump_head(pipe_id, x)
                 p = self.get_pump_power(pipe_id, x)
 
-            f = UnivariateSpline(x, h, k=1, s=0)
+            head_points = UnivariateSpline(x, h, k=1, s=0)
+            power_points = UnivariateSpline(x, p, k=1, s=0)
             pl = {}
-            for i in range(len(x) - 1):
-                a, b = utils.linear_coefficients_from_two_pints((x[i], float(f(x[i]))), (x[i + 1], float(f(x[i + 1]))))
-                pl[i] = {'start': (x[i], float(f(x[i]))), 'end': (x[i + 1], float(f(x[i + 1]))), 'a': a, 'b': b}
+            for i in range(len(x)):
+                pl[i] = {'flow': x[i], 'head': float(head_points(x[i])), 'power': float(power_points(x[i]))}
 
             pipes_pl[pipe_id] = pl
 
