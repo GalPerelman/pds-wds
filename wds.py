@@ -82,11 +82,9 @@ class WDS:
         for pipe_id, row in self.pipes.iterrows():
             if row['type'] == 'pipe':
                 x = np.linspace(-row['max_flow_cmh'], row['max_flow_cmh'], self.n)
-                y = -row['R'] * x * (np.abs(x)) ** 0.852
+                h = -row['R'] * x * (np.abs(x)) ** 0.852
             if row['type'] == 'pump':
-                a = self.pumps.loc[pipe_id, 'a']
-                b = self.pumps.loc[pipe_id, 'b']
-                x = np.linspace(1,  row['max_flow_cmh'], self.n)
+                x = np.linspace(0,  row['max_flow_cmh'], self.n)
                 h = self.get_pump_head(pipe_id, x)
                 p = self.get_pump_power(pipe_id, x)
 
