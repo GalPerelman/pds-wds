@@ -3,8 +3,9 @@ import networkx as nx
 
 
 class OptGraphs:
-    def __init__(self, pds, x):
+    def __init__(self, pds, wds, x):
         self.pds = pds
+        self.wds = wds
         self.x = x
 
     def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}):
@@ -44,8 +45,17 @@ class OptGraphs:
 
         ax.bar(range(self.pds.n_bus), self.x['v'].get()[:, t])
 
+    def plot_all_tanks(self, ncols=3):
+        fig, axes = plt.subplots(nrows=max(len(self.wds.tanks) % ncols, 1), ncols=ncols, sharex=True, figsize=(8, 4))
+        axes = axes.ravel()
+        for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
+            values = self.x['vol'].get()[i, :]
+            axes[i] = time_series(x=range(len(values)), y=values, title=f'Tank {tank_id}', ax=axes[i])
 
-def time_series(x, y, ax=None, ylabel=''):
+        plt.tight_layout()
+
+
+def time_series(x, y, ax=None, ylabel='', title=''):
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -54,3 +64,8 @@ def time_series(x, y, ax=None, ylabel=''):
 
     if ylabel:
         ax.set_ylabel(ylabel)
+
+    if title:
+        ax.set_title(title)
+
+    return ax
