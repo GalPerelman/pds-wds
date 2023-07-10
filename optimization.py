@@ -40,7 +40,7 @@ class Opt:
         I = self.model.dvar((self.pds.n_lines, self.t))  # lines squared current flow
         p = self.model.dvar((self.pds.n_lines, self.t))  # lines active power flow
         q = self.model.dvar((self.pds.n_lines, self.t))  # lines reactive power flow
-
+        #
         self.model.st(gen_p >= 0)
         self.model.st(gen_q >= 0)
         self.model.st(psh_y >= 0)
@@ -91,9 +91,10 @@ class Opt:
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
         pumps = self.pumps_power().sum(axis=0)
         turbine = self.turbine_power().sum(axis=0)
-        wds_cost = sum((pumps - turbine) @ self.wds.tariffs.sum(axis=1).values)
-        psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
-        self.model.min(pds_cost + wds_cost + psh_cost)
+
+        wds_cost = (pumps - 0.9 * turbine) @ self.wds.tariffs.sum(axis=1).values
+        # psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
+        self.model.min(pds_cost + wds_cost)
 
     def bus_balance(self):
         r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
@@ -148,7 +149,6 @@ class Opt:
         init_vol = np.zeros((self.wds.n_tanks, self.t))
         init_vol[:, 0] = self.wds.tanks['init_vol'].values
         init_vol = tanks_mat @ init_vol
-
         self.model.st(not_source @ a @ ((self.pl_flow_mat * self.x['alpha']).sum(axis=-1))
                       - ((tanks_mat @ self.x['vol']) @ dt) + init_vol
                       - self.wds.demands.values == 0)
@@ -158,7 +158,7 @@ class Opt:
 
     def no_pumps_backflow(self):
         pumps_idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'pump'].index
-        self.model.st(self.x['alpha'][pumps_idx, :] >= 0)
+        self.model.st(self.x['alpha'][pumps_idx, :, :] >= 0)
 
     def head_boundaries(self):
         self.model.st(self.x['h'] >= self.wds.nodes['elevation'].values.reshape(-1, 1))
@@ -182,14 +182,15 @@ class Opt:
 
     def pumps_power(self):
         idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'pump'].index
-        return (self.pl_power_mat[idx, :, :] * self.x['alpha'][idx, :, :]).sum(axis=-1)
+        pl_power = np.take(self.pl_power_mat, idx, axis=0)
+        return (self.pl_power_mat * self.x['alpha']).sum(axis=-1)
 
     def turbine_power(self):
         idx = self.wds.pipes.loc[self.wds.pipes['type'] == 'turbine'].index
         return (self.pl_power_mat[idx, :, :] * self.x['alpha'][idx, :, :]).sum(axis=-1)
 
     def solve(self):
-        self.model.solve(grb, display=True)
+        self.model.solve(grb, display=True, params={'TimeLimit': 45, 'MIPGap': 0.01})
         obj, status = self.model.solution.objval, self.model.solution.status
         print(obj, status)
 
