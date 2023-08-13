@@ -31,6 +31,7 @@ class WDS:
         self.n_pipes = len(self.pipes)
         self.n_pumps = len(self.pumps)
         self.n_tanks = len(self.tanks)
+        self.n_turbines = len(self.pipes.loc[self.pipes['type'] == 'turbine'])
 
         self.get_pipes_resistance()
         self.convert_to_cmh()
