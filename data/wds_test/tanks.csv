@@ -1,0 +1,2 @@
+﻿tank_node,init_vol,target_vol,min_vol,max_vol,max_flow,diameter
+4,1200,1200,500,9000,1080,33.85
