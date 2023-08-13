@@ -15,7 +15,6 @@ class Opt:
         self.wds_data = wds_data
         self.t = t
         self.n = n  # number of breakpoints for piecewise linearization
-        self.M = self.n - 1  # number of piecewise linear segments
 
         self.pds, self.wds = self.init_distribution_systems()
         self.model = ro.Model()
@@ -48,7 +47,7 @@ class Opt:
         self.model.st(I >= 0)
 
         alpha = self.model.dvar((self.wds.n_pipes, self.t, self.n))  # pipe segments relative flows
-        beta = self.model.dvar((self.wds.n_pipes, self.t, self.M), vtype='B')
+        beta = self.model.dvar((self.wds.n_pipes, self.t, self.n - 1), vtype='B')
         h = self.model.dvar((self.wds.n_nodes, self.t))  # nodes head
         pf = self.model.dvar((self.wds.n_pumps, self.t))  # pump flows
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
