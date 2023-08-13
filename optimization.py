@@ -90,7 +90,10 @@ class Opt:
     def objective_func(self):
         pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
         pumps = self.pumps_power().sum(axis=0)
-        turbine = self.turbine_power().sum(axis=0)
+        if self.wds.n_turbines > 0:
+            turbine = self.turbine_power().sum(axis=0)
+        else:
+            turbine = 0
 
         wds_cost = (pumps - 0.9 * turbine) @ self.wds.tariffs.sum(axis=1).values
         # psh_cost = (self.pds.psh['fill_tariff'].values @ self.x['psh_y']).sum()
@@ -162,6 +165,9 @@ class Opt:
 
     def head_boundaries(self):
         self.model.st(self.x['h'] >= self.wds.nodes['elevation'].values.reshape(-1, 1))
+        tanks_idx = self.wds.nodes.loc[self.wds.nodes['type'] == 'tank'].index.values
+        tanks_diam = self.wds.tanks.loc[tanks_idx, 'diameter'].values.reshape(-1, 1)
+        self.model.st((self.x['h'])[tanks_idx, :] - (self.x['vol']) * (4 / (np.pi * tanks_diam ** 2)) >= 0)
 
         res_idx = self.wds.nodes.loc[self.wds.nodes['type'] == 'reservoir'].index
         self.model.st(self.x['h'][res_idx, :] == self.wds.nodes.loc[res_idx, 'elevation'].values.reshape(-1, 1))
