@@ -3,10 +3,10 @@ import networkx as nx
 
 
 class OptGraphs:
-    def __init__(self, opt, pds, wds):
+    def __init__(self, opt):
         self.opt = opt
-        self.pds = pds
-        self.wds = wds
+        self.pds = opt.pds
+        self.wds = opt.wds
         self.x = self.opt.x
 
     def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}):
