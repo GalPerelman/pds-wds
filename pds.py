@@ -64,3 +64,14 @@ class PDS:
 
         mat[start_indices, end_indices] = mat_values
         return mat
+
+    def construct_bus_pumps_mat(self):
+        mat = np.zeros((len(self.bus), int(self.bus['pump_id'].max() + 1)))
+
+        # Get row and column indices where the bus are connected to pumps (pump_id col is not Nan)
+        row_indices = self.bus.index[~self.bus['pump_id'].isna()].to_numpy()
+        col_indices = self.bus['pump_id'].dropna().astype(int).to_numpy()
+
+        # Use row and column indices to set corresponding elements in the matrix to 1
+        mat[row_indices, col_indices] = 1
+        return mat
