@@ -1,4 +1,4 @@
-﻿state,flow1,flow2,flow3,flow4,flow,power1,power2,power3,power4,total_power,well1,well2,well3,booster,from,to,station
+﻿state,flow1,flow2,flow3,flow4,flow,power1,power2,power3,power4,total_power,pump_well1,pump_well2,pump_well3,pump_booster,from,to,station
 0,145,145,91.5,0,381.5,88.36,65.3,34.84,0,188.5,1,1,1,0,0,t1,1
 1,0,146,93,0,239,0,66,34.85,0,100.85,0,1,1,0,0,t1,1
 2,0,0,114,0,114,0,0,37,0,37,0,0,1,0,0,t1,1
