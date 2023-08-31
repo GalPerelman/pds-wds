@@ -1,5 +1,9 @@
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+from matplotlib.lines import Line2D
+import matplotlib.patheffects as PathEffects
 
 
 class OptGraphs:
@@ -9,7 +13,7 @@ class OptGraphs:
         self.wds = opt.wds
         self.x = self.opt.x
 
-    def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}):
+    def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}, title=''):
         df = edges_data.copy()
         if edges_values:
             df['w'] = edges_values.values()
@@ -39,6 +43,7 @@ class OptGraphs:
             nx.draw_networkx_edge_labels(G, coords, ax=ax, edge_labels=edge_labels, font_size=8)
 
         plt.subplots_adjust(bottom=0.04, top=0.96, left=0.04, right=0.96)
+        plt.suptitle(title)
 
     def bus_voltage(self, t, ax=None):
         if ax is None:
@@ -63,6 +68,26 @@ class OptGraphs:
             axes[i] = time_series(x=range(len(values)), y=values, title=f'Pump {pump_id}', ax=axes[i])
 
         plt.tight_layout()
+
+    def pumps_gantt(self, pumps_names: list):
+        df = pd.DataFrame(self.x['pumps'].get()).T
+
+        pe = [PathEffects.Stroke(linewidth=6, foreground='black'),
+              PathEffects.Stroke(foreground='black'),
+              PathEffects.Normal()]
+
+        fig, ax = plt.subplots()
+        for i, unit in enumerate(pumps_names):
+            unit_combs = self.wds.combs.loc[self.wds.combs[unit] == 1].index.to_list()
+            temp = pd.DataFrame((df[unit_combs] > 0).any(axis=1).astype(int), columns=[unit], index=df.index)
+            temp.loc[:, 'start'] = temp.index
+            temp.loc[:, 'end'] = temp['start'] + pd.Series(temp[unit])
+            ax.hlines([i], temp.index.min(), temp.index.max() + 1, linewidth=5, color='w', path_effects=pe)
+            ax.hlines(np.repeat(i, len(temp)), temp['end'], temp['start'], linewidth=5, colors='black')
+
+        ax.xaxis.grid(True)
+        ax.set_yticks([i for i in range(len(pumps_names))])
+        ax.set_yticklabels(pumps_names)
 
 
 def time_series(x, y, ax=None, ylabel='', title=''):
