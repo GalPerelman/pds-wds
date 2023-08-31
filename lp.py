@@ -14,7 +14,7 @@ from pds import PDS
 
 class WaterNet:
     """
-    This class is structured to linear optimization of the wds operation
+    This class is structured for linear optimization of the wds operation
     While the class in wds.py is more general
     """
 
@@ -51,7 +51,6 @@ class Model:
 
         self.model = ro.Model()
         self.x = self.declare_vars()
-        self.build_opt_problem()
 
     def declare_vars(self):
         gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
@@ -80,22 +79,34 @@ class Model:
         return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
                 'pumps': x_pumps, 'vol': vol}
 
-    def build_opt_problem(self):
-        self.objective_func()
-        self.bus_balance()
-        self.energy_conservation()
-        self.voltage_bounds()
-        self.power_flow_constraint()
+    def get_wds_cost(self):
+        wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
+        wds_cost = (self.pds.grid_tariff.values.T * wds_power).sum()
+        return wds_cost
+
+    def get_pds_cost(self):
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
+        return pds_cost
+
+    def build_water_problem(self):
+        wds_cost = self.get_wds_cost()
+        self.objective_func(wds_cost, 0)
         self.one_comb_only()
         self.mass_balance()
 
-    def objective_func(self):
-        wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
-        wds_cost = (self.pds.grid_tariff.values.T * wds_power).sum()
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
-        self.model.min(pds_cost + wds_cost)
+    def build_combined_problem(self, x_pumps=None):
+        wds_cost = self.get_wds_cost()
+        pds_cost = self.get_pds_cost()
+        self.objective_func(wds_cost, pds_cost)
+        self.bus_balance(x_pumps=x_pumps)
+        self.energy_conservation()
+        self.voltage_bounds()
+        self.power_flow_constraint()
 
-    def bus_balance(self):
+    def objective_func(self, wds_obj, pds_obj):
+        self.model.min(wds_obj + pds_obj)
+
+    def bus_balance(self, x_pumps):
         r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
                                        param='r_pu')
         x = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
@@ -105,10 +116,14 @@ class Model:
         bus_pumps = self.pds.construct_bus_pumps_mat()
         power_mat = self.wds.combs[[_ for _ in self.wds.combs.columns if _.startswith('power')]].fillna(0).values.T
         power_mat = (power_mat * 1000) / (self.pds.power_base_mva * 10 ** 6)
+        if x_pumps is not None:
+            pumps_power = bus_pumps @ power_mat @ x_pumps
+        else:
+            pumps_power = bus_pumps @ power_mat @ self.x['pumps']
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
                       - r @ self.x['I']
-                      - self.pds.dem_active.values  # - bus_pumps @ power_mat @ self.x['pumps']
+                      - self.pds.dem_active.values - pumps_power
                       + self.pds.bus.loc[:, 'G'].values @ self.x['v']
                       == 0)
 
@@ -196,19 +211,25 @@ class Model:
         print(obj, status)
 
 
-if __name__ == "__main__":
+def solve_water():
     model = Model(pds_data=os.path.join('data', 'pds'), wds_data=os.path.join('data', 'wds_wells'), t=24)
+    model.build_water_problem()
     model.solve()
+    return model
 
 
-    g = graphs.OptGraphs(model)
-    g.plot_all_tanks()
+def solve_combined(x_pumps=None):
+    model = Model(pds_data=os.path.join('data', 'pds'), wds_data=os.path.join('data', 'wds_wells'), t=24)
+    model.build_combined_problem(x_pumps)
+    model.solve()
+    return model
 
-    n_vals = values = {i: model.x['v'].get()[i, 0] for i in range(model.pds.n_bus)}
-    e_vals = values = {i: model.x['p'].get()[i, 0] * model.pds.pu_to_kw for i in range(model.pds.n_lines)}
-    n_vals = {t: round(val, 1) for t, val in values.items()}
-    e_vals = {t: round(val, 1) for t, val in values.items()}
 
-    g.plot_graph(model.pds.lines, coords=model.pds.coords, from_col='from_bus', to_col='to_bus',
-                 edges_values=e_vals, nodes_values=n_vals)
-    plt.show()
+if __name__ == "__main__":
+    model = solve_combined()
+
+    model_wds = solve_water()
+    x_pumps = model_wds.x['pumps'].get()
+
+    model_pds_by_wds = solve_combined(x_pumps)
+
