@@ -2,6 +2,7 @@ import os.path
 
 import numpy as np
 import pandas as pd
+import code
 import matplotlib.pyplot as plt
 import rsome
 from rsome import ro
@@ -102,6 +103,12 @@ class Model:
         self.energy_conservation()
         self.voltage_bounds()
         self.power_flow_constraint()
+
+        if x_pumps is not None:
+            self.model.st(self.x['pumps'] - x_pumps == 0)
+
+        self.one_comb_only()
+        self.mass_balance()
 
     def objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
@@ -206,9 +213,16 @@ class Model:
                       == np.squeeze(rhs))
 
     def solve(self):
-        self.model.solve(grb, display=True, params={'TimeLimit': 45, 'MIPGap': 0.01})
+        self.model.solve(grb, display=False)
         obj, status = self.model.solution.objval, self.model.solution.status
-        print(obj, status)
+        wds_cost, pds_cost = self.get_systemwise_costs()
+        print(obj, status, wds_cost, pds_cost)
+
+    def get_systemwise_costs(self):
+        wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
+        wds_cost = (self.pds.grid_tariff.values.T * wds_power).sum()
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) @ self.pds.grid_tariff.values).sum()
+        return wds_cost, pds_cost
 
 
 def solve_water():
@@ -223,13 +237,3 @@ def solve_combined(x_pumps=None):
     model.build_combined_problem(x_pumps)
     model.solve()
     return model
-
-
-if __name__ == "__main__":
-    model = solve_combined()
-
-    model_wds = solve_water()
-    x_pumps = model_wds.x['pumps'].get()
-
-    model_pds_by_wds = solve_combined(x_pumps)
-
