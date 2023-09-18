@@ -20,11 +20,12 @@ class WaterNet:
     """
 
     def __init__(self, data_folder):
-        self.date_folder = data_folder
+        self.data_folder = data_folder
 
-        self.combs = pd.read_csv(os.path.join(self.date_folder, 'combs.csv'), index_col=0)
-        self.tanks = pd.read_csv(os.path.join(self.date_folder, 'tanks.csv'), index_col=0)
-        self.demands = pd.read_csv(os.path.join(self.date_folder, 'demands.csv'), index_col=0)
+        self.combs = pd.read_csv(os.path.join(self.data_folder, 'combs.csv'), index_col=0)
+        self.tanks = pd.read_csv(os.path.join(self.data_folder, 'tanks.csv'), index_col=0)
+        self.demands = pd.read_csv(os.path.join(self.data_folder, 'demands.csv'), index_col=0)
+        self.tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
 
         self.n_combs = len(self.combs)
         self.n_tanks = len(self.tanks)
@@ -82,11 +83,11 @@ class Model:
 
     def get_wds_cost(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
-        wds_cost = (self.pds.grid_tariff.values.T * wds_power).sum()
+        wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
         return wds_cost
 
     def get_pds_cost(self):
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.T.values).sum().sum()
         return pds_cost
 
     def build_water_problem(self):
@@ -96,7 +97,7 @@ class Model:
         self.mass_balance()
 
     def build_combined_problem(self, x_pumps=None):
-        wds_cost = self.get_wds_cost()
+        wds_cost = 0
         pds_cost = self.get_pds_cost()
         self.objective_func(wds_cost, pds_cost)
         self.bus_balance(x_pumps=x_pumps)
@@ -220,8 +221,8 @@ class Model:
 
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
-        wds_cost = (self.pds.grid_tariff.values.T * wds_power).sum()
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) @ self.pds.grid_tariff.values).sum()
+        wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) @ self.pds.grid_tariff.T.values).sum().sum()
         return wds_cost, pds_cost
 
 
