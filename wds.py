@@ -47,7 +47,7 @@ class WDS:
     def hazen_wiliams(c, d, l):
         """
         c: roughness: (dimensionless)
-        d: diamater: (m)
+        d: diameter: (m)
         l: length: (m)
         return: head loss (m) coefficient
         """
