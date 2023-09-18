@@ -15,8 +15,7 @@ class PDS:
         self.psh = pd.read_csv(os.path.join(self.data_folder, 'psh.csv'), index_col=0)
         self.dem_active = pd.read_csv(os.path.join(self.data_folder, 'dem_active_power.csv'), index_col=0)
         self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)
-        self.grid_tariff = pd.read_csv(os.path.join(self.data_folder, 'grid_tariff.csv'), index_col=0,
-                                       usecols=['time', 'grid_price'])
+        self.grid_tariff = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
 
         # read other parameters
         with open(os.path.join(self.data_folder, 'params.yaml'), 'r') as f:
