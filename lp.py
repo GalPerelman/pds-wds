@@ -107,7 +107,7 @@ class Model:
         wds_cost = 0
         pds_cost = self.get_pds_cost()
         self.objective_func(wds_cost, pds_cost)
-        self.max_power_generation()
+        self.power_generation_bounds()
         self.bus_balance(x_pumps=x_pumps)
         self.energy_conservation()
         self.voltage_bounds()
@@ -122,10 +122,10 @@ class Model:
     def objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
 
-    def max_power_generation(self):
-        max_power = self.pds.bus['max_gen_MW'].copy(deep=True)  # in PU after constructing pds
-        max_power = max_power.fillna(np.inf)
-        max_power = np.multiply(max_power.values, self.pds.max_gen_profile.T).T.values
+    def power_generation_bounds(self):
+        min_power = np.multiply(self.pds.bus['min_gen_kw'].values, self.pds.max_gen_profile.T).T.values
+        max_power = np.multiply(self.pds.bus['max_gen_kw'].values, self.pds.max_gen_profile.T).T.values
+        self.model.st(- self.x['gen_p'] + min_power <= 0)
         self.model.st(self.x['gen_p'] - max_power <= 0)
 
     def bus_balance(self, x_pumps):
@@ -236,8 +236,11 @@ class Model:
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
         wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
-        pds_cost = np.sum(self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) * self.pds.tariffs.values)
-        return wds_cost, pds_cost
+        grid_cost = np.sum(self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) * self.pds.tariffs.values)
+        generation_cost = np.sum((self.pds.bus['a'].values.reshape(-1, 1) * self.x['gen_p'].get().flatten()) ** 2) \
+                          + (self.pds.bus['b'].values.reshape(-1, 1) * self.x['gen_p'].get()).sum() \
+                          + (self.pds.bus['c'].values.reshape(-1, 1)).sum()
+        return wds_cost, grid_cost + generation_cost
 
 
 def solve_water():
