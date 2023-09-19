@@ -1,4 +1,4 @@
 ﻿bus_id,name,min_gen_kw,max_gen_kw,a,b,c
-0,grid,0,0,,,
-1,local_gen,1500,3000,0.0026,10.26,210
-24,local_pv,0,1000,,,
+0,grid,0,0,0,0,0
+1,local_gen,1500,3000,2.6E-09,0.01026,210
+24,local_pv,0,1000,0,0,0
