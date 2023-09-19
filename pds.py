@@ -7,7 +7,23 @@ import utils
 
 
 class PDS:
-    def __init__(self, data_folder):
+    def __init__(self, data_folder: str):
+        """
+        The units of the input data files:
+        bus             Vmin_pu:            pu
+        bus             Vmax_pu:            pu
+        lines           r_ohm:              ohm
+        lines           x_ohm:              ohm
+        active_dem:     all                 kW
+        reactive_dem:   all                 kW
+        tariffs:        all                 S/kWh
+        generators      min_gen_kw:         kW
+        generators      max_gen_kw:         kW
+        generators      a:                  $/(kW^2)h
+        generators      b:                  $/kWh
+        generators      c:                  $
+
+        """
         self.data_folder = data_folder
 
         self.bus = pd.read_csv(os.path.join(self.data_folder, 'bus.csv'), index_col=0)
@@ -31,6 +47,7 @@ class PDS:
         self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
         self.factorize_demands()
         self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
+        self.construct_generators_params()
 
     def factorize_demands(self):
         try:
@@ -86,3 +103,7 @@ class PDS:
         # Use row and column indices to set corresponding elements in the matrix to 1
         mat[row_indices, col_indices] = 1
         return mat
+
+    def construct_generators_params(self):
+        self.bus = pd.merge(self.bus, self.generators, left_index=True, right_index=True, how='outer')
+        self.bus[['a', 'b', 'c']] = self.bus[['a', 'b', 'c']].fillna(0)
