@@ -87,7 +87,7 @@ class Model:
         return wds_cost
 
     def get_pds_cost(self):
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.T.values).sum().sum()
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) * self.pds.tariffs.values).sum().sum()
         return pds_cost
 
     def build_water_problem(self):
@@ -222,7 +222,7 @@ class Model:
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
         wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) @ self.pds.grid_tariff.T.values).sum().sum()
+        pds_cost = np.sum(self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) * self.pds.tariffs.values)
         return wds_cost, pds_cost
 
 
