@@ -100,6 +100,7 @@ class Model:
         wds_cost = 0
         pds_cost = self.get_pds_cost()
         self.objective_func(wds_cost, pds_cost)
+        self.max_power_generation()
         self.bus_balance(x_pumps=x_pumps)
         self.energy_conservation()
         self.voltage_bounds()
@@ -113,6 +114,12 @@ class Model:
 
     def objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
+
+    def max_power_generation(self):
+        max_power = self.pds.bus['max_gen_MW'].copy(deep=True)  # in PU after constructing pds
+        max_power = max_power.fillna(np.inf)
+        max_power = np.multiply(max_power.values, self.pds.max_gen_profile.T).T.values
+        self.model.st(self.x['gen_p'] - max_power <= 0)
 
     def bus_balance(self, x_pumps):
         r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
