@@ -16,6 +16,7 @@ class PDS:
         self.dem_active = pd.read_csv(os.path.join(self.data_folder, 'dem_active_power.csv'), index_col=0)  # kW
         self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)  # kW
         self.tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
+        self.generators = pd.read_csv(os.path.join(self.data_folder, 'generators.csv'), index_col=0)
         self.max_gen_profile = pd.read_csv(os.path.join(self.data_folder, 'max_gen_profile.csv'), index_col=0)  # MW
 
         # read other parameters
