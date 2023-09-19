@@ -43,12 +43,20 @@ class PDS:
             pass
 
     def convert_to_pu(self):
+        """
+        Function for converting input data to PU (dimensionless per unit)
+        The conversion is done by remove all magnitude units (Kilo, Mega etc.) and divide by base values
+        base voltage and base power - defined in the input params.yaml file
+        return:
+            values to inverse conversion back to physical units
+            pu_to_kw, pu_to_kv
+        """
         z = ((self.nominal_voltage_kv * 1000) ** 2) / (self.power_base_mva * 10 ** 6)
         self.lines['r_pu'] = self.lines['r_ohm'] / z
         self.lines['x_pu'] = self.lines['x_ohm'] / z
         self.dem_active = (self.dem_active * 1000) / (self.power_base_mva * 10 ** 6)
         self.dem_reactive = (self.dem_reactive * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['max_gen_MW'] = self.bus['max_gen_MW'] / (self.power_base_mva * 10 ** 6)
+        self.bus['max_gen_MW'] = (self.bus['max_gen_MW'] * 10 ** 6) / (self.power_base_mva * 10 ** 6)
         return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
     def get_bus_lines(self, bus_id):
