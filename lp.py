@@ -87,8 +87,15 @@ class Model:
         return wds_cost
 
     def get_pds_cost(self):
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) * self.pds.tariffs.values).sum().sum()
-        return pds_cost
+        # constant cost term - like purchasing from grid
+        const_term = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) * self.pds.tariffs.values).sum().sum()
+
+        # generation cost term - fuel cost for generators, usually 0 for grid and renewable
+        generation_cost = rsome.sumsqr((self.pds.bus['a'].values.reshape(-1, 1) * self.x['gen_p']).flatten()) \
+                          + (self.pds.bus['b'].values.reshape(-1, 1) * self.x['gen_p']).sum() \
+                          + (self.pds.bus['c'].values.reshape(-1, 1)).sum()
+
+        return const_term + generation_cost
 
     def build_water_problem(self):
         wds_cost = self.get_wds_cost()
