@@ -87,7 +87,7 @@ class Opt:
         return mat
 
     def objective_func(self):
-        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.grid_tariff.values).sum()
+        pds_cost = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) @ self.pds.tariffs.values).sum()
         pumps = self.pumps_power().sum(axis=0)
         if self.wds.n_turbines > 0:
             turbine = self.turbine_power().sum(axis=0)

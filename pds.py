@@ -13,9 +13,10 @@ class PDS:
         self.bus = pd.read_csv(os.path.join(self.data_folder, 'bus.csv'), index_col=0)
         self.lines = pd.read_csv(os.path.join(self.data_folder, 'lines.csv'), index_col=0)
         self.psh = pd.read_csv(os.path.join(self.data_folder, 'psh.csv'), index_col=0)
-        self.dem_active = pd.read_csv(os.path.join(self.data_folder, 'dem_active_power.csv'), index_col=0)
-        self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)
-        self.grid_tariff = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
+        self.dem_active = pd.read_csv(os.path.join(self.data_folder, 'dem_active_power.csv'), index_col=0)  # kW
+        self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)  # kW
+        self.tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
+        self.max_gen_profile = pd.read_csv(os.path.join(self.data_folder, 'max_gen_profile.csv'), index_col=0)  # MW
 
         # read other parameters
         with open(os.path.join(self.data_folder, 'params.yaml'), 'r') as f:
@@ -47,6 +48,7 @@ class PDS:
         self.lines['x_pu'] = self.lines['x_ohm'] / z
         self.dem_active = (self.dem_active * 1000) / (self.power_base_mva * 10 ** 6)
         self.dem_reactive = (self.dem_reactive * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_gen_MW'] = self.bus['max_gen_MW'] / (self.power_base_mva * 10 ** 6)
         return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
     def get_bus_lines(self, bus_id):
