@@ -44,10 +44,10 @@ class PDS:
         self.n_lines = len(self.lines)
         self.n_psh = len(self.psh)
 
-        self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
         self.factorize_demands()
         self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
         self.construct_generators_params()
+        self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
 
     def factorize_demands(self):
         try:
@@ -74,7 +74,8 @@ class PDS:
         self.lines['x_pu'] = self.lines['x_ohm'] / z
         self.dem_active = (self.dem_active * 1000) / (self.power_base_mva * 10 ** 6)
         self.dem_reactive = (self.dem_reactive * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['max_gen_MW'] = (self.bus['max_gen_MW'] * 10 ** 6) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_gen_kw'] = (self.bus['max_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['min_gen_kw'] = (self.bus['min_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
         return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
     def get_bus_lines(self, bus_id):
@@ -107,3 +108,5 @@ class PDS:
     def construct_generators_params(self):
         self.bus = pd.merge(self.bus, self.generators, left_index=True, right_index=True, how='outer')
         self.bus[['a', 'b', 'c']] = self.bus[['a', 'b', 'c']].fillna(0)
+        self.bus['min_gen_kw'] = self.bus[['min_gen_kw']].fillna(0)
+        self.bus['max_gen_kw'] = self.bus[['max_gen_kw']].fillna(np.inf)
