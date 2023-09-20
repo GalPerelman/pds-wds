@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -88,6 +89,16 @@ class OptGraphs:
         ax.xaxis.grid(True)
         ax.set_yticks([i for i in range(len(pumps_names))])
         ax.set_yticklabels(pumps_names)
+
+    def all_ts(self, x_name, factor=1):
+        x = self.x[x_name].get() * factor
+
+        ncols = int(math.ceil(math.sqrt(x.shape[0])))
+        nrows = int(math.ceil(x.shape[0] / ncols))
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+        axes = axes.ravel()
+        for i in range(x.shape[0]):
+            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i])
 
 
 def time_series(x, y, ax=None, ylabel='', title=''):
