@@ -91,9 +91,13 @@ class Model:
         const_term = (self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p']) * self.pds.tariffs.values).sum().sum()
 
         # generation cost term - fuel cost for generators, usually 0 for grid and renewable
-        generation_cost = rsome.sumsqr((self.pds.bus['a'].values.reshape(-1, 1) * self.x['gen_p']).flatten()) \
-                          + (self.pds.bus['b'].values.reshape(-1, 1) * self.x['gen_p']).sum() \
-                          + (self.pds.bus['c'].values.reshape(-1, 1)).sum()
+        # NOTE THAT C IS MULTIPLIED BY T - NUMBER OF TIME STEPS
+        # ASSUMING GENERATORS ARE NOT TURNED OFF - THUS FIXED COST IS FOR EVERY TIME STEP
+        generated_kw = self.x['gen_p'] * self.pds.pu_to_kw
+        generation_cost = (rsome.sumsqr(((self.pds.bus['a'].values.reshape(-1, 1) ** 0.5) * generated_kw).flatten())
+                           + (self.pds.bus['b'].values.reshape(-1, 1) * generated_kw).sum()
+                           + (self.pds.bus['c'].values.reshape(-1, 1) * self.t).sum()
+                           )
 
         return const_term + generation_cost
 
@@ -237,9 +241,14 @@ class Model:
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
         wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
         grid_cost = np.sum(self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) * self.pds.tariffs.values)
-        generation_cost = np.sum((self.pds.bus['a'].values.reshape(-1, 1) * self.x['gen_p'].get().flatten()) ** 2) \
-                          + (self.pds.bus['b'].values.reshape(-1, 1) * self.x['gen_p'].get()).sum() \
-                          + (self.pds.bus['c'].values.reshape(-1, 1)).sum()
+
+        # NOTE THAT C IS MULTIPLIED BY T - NUMBER OF TIME STEPS
+        # ASSUMING GENERATORS ARE NOT TURNED OFF - THUS FIXED COST IS FOR EVERY TIME STEP
+        generated_kw = self.x['gen_p'].get() * self.pds.pu_to_kw
+        generation_cost = (np.sum((((self.pds.bus['a'].values.reshape(-1, 1) ** 0.5) * generated_kw).flatten()) ** 2)
+                           + (self.pds.bus['b'].values.reshape(-1, 1) * generated_kw).sum()
+                           + (self.pds.bus['c'].values.reshape(-1, 1) * self.t).sum()
+                           )
         return wds_cost, grid_cost + generation_cost
 
 
