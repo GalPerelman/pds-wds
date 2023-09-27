@@ -52,8 +52,12 @@ class OptGraphs:
 
         ax.bar(range(self.pds.n_bus), self.x['v'].get()[:, t])
 
-    def plot_all_tanks(self, ncols=3):
-        fig, axes = plt.subplots(nrows=max(len(self.wds.tanks) % ncols, 1), ncols=ncols, sharex=True, figsize=(8, 4))
+    def plot_all_tanks(self):
+        n = self.wds.n_tanks
+        ncols = int(math.ceil(math.sqrt(n)))
+        nrows = int(math.ceil(n / ncols))
+
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
         axes = axes.ravel()
         for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
             values = self.x['vol'].get()[i, :]
@@ -61,8 +65,12 @@ class OptGraphs:
 
         plt.tight_layout()
 
-    def plot_all_pumps(self, ncols=3):
-        fig, axes = plt.subplots(nrows=len(self.wds.pumps) % ncols + 1, ncols=ncols, sharex=True, figsize=(8, 4))
+    def plot_all_pumps(self):
+        n = self.wds.n_pumps
+        ncols = int(math.ceil(math.sqrt(n)))
+        nrows = int(math.ceil(n / ncols))
+
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
         axes = axes.ravel()
         for i, (pump_id, row) in enumerate(self.wds.pumps.iterrows()):
             values = (self.x['alpha'].get() * self.opt.pl_flow_mat).sum(axis=-1)[pump_id, :]
