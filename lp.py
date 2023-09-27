@@ -217,7 +217,7 @@ class Model:
 
             tank_mat = self.construct_tank_mat()
             lhs[self.t * i: self.t * (i + 1),
-            (self.wds.n_combs + i) * self.t: (self.wds.n_combs + i + 1) * self.t] = tank_mat
+                (self.wds.n_combs + i) * self.t: (self.wds.n_combs + i + 1) * self.t] = tank_mat
 
             dem = self.wds.get_tank_demand(tank_id).to_numpy()[:, np.newaxis]
             rhs[self.t * i: self.t * (i + 1)] = dem
@@ -234,8 +234,9 @@ class Model:
     def solve(self):
         self.model.solve(grb, display=False)
         obj, status = self.model.solution.objval, self.model.solution.status
-        wds_cost, pds_cost = self.get_systemwise_costs()
-        print(obj, status, wds_cost, pds_cost)
+        wds_cost, grid_cost, generation_cost = self.get_systemwise_costs()
+        print(f'Objective: {obj:.2f} | WDS: {wds_cost:.2f} | Generators {generation_cost:.2f} | Grid {grid_cost:.2f}')
+        print('======================================================================================')
 
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
@@ -249,7 +250,7 @@ class Model:
                            + (self.pds.bus['b'].values.reshape(-1, 1) * generated_kw).sum()
                            + (self.pds.bus['c'].values.reshape(-1, 1) * self.t).sum()
                            )
-        return wds_cost, grid_cost + generation_cost
+        return wds_cost, grid_cost, generation_cost
 
 
 def solve_water():
