@@ -60,8 +60,8 @@ class OptGraphs:
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
         axes = axes.ravel()
         for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
-            values = self.x['vol'].get()[i, :]
-            axes[i] = time_series(x=range(len(values)), y=values, title=f'Tank {tank_id}', ax=axes[i])
+            values = [row['init_vol']] + list(self.x['vol'].get()[i, :])
+            axes[i] = time_series(x=range(len(values)+1), y=values, title=f'Tank {tank_id}', ax=axes[i])
 
         plt.tight_layout()
 
@@ -107,6 +107,20 @@ class OptGraphs:
         axes = axes.ravel()
         for i in range(x.shape[0]):
             axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i])
+
+
+def plot_demands(pds, wds):
+    fig, axes = plt.subplots(nrows=2, sharex=True)
+
+    axes[0].plot(pds.dem_active.sum(axis=0).T * pds.pu_to_kw, marker='o', markersize=4, mfc='w')
+    axes[0].grid()
+    axes[0].set_ylabel('Active power (kW)')
+
+    axes[1].plot(wds.demands.sum(axis=1).index, wds.demands.sum(axis=1), marker='o', markersize=4, mfc='w')
+    axes[1].grid()
+    axes[1].set_ylabel('Water demand (CMH)')
+
+    fig.align_ylabels()
 
 
 def time_series(x, y, ax=None, ylabel='', title=''):
