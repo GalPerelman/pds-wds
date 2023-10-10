@@ -22,6 +22,11 @@ class PDS:
         generators      a:                  $/(kW^2)h
         generators      b:                  $/kWh
         generators      c:                  $
+        batteries       min_storage_kwh     kWh
+        batteries       max_storage_kwh     kWh
+        batteries       max_power_kw        kW
+        batteries       init_storage_kwh    kWh
+        batteries       final_storage       kWh
 
         """
         self.data_folder = data_folder
@@ -33,6 +38,7 @@ class PDS:
         self.dem_reactive = pd.read_csv(os.path.join(self.data_folder, 'dem_reactive_power.csv'), index_col=0)  # kW
         self.tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
         self.generators = pd.read_csv(os.path.join(self.data_folder, 'generators.csv'), index_col=0)
+        self.batteries = pd.read_csv(os.path.join(self.data_folder, 'batteries.csv'), index_col=0)
         self.max_gen_profile = pd.read_csv(os.path.join(self.data_folder, 'max_gen_profile.csv'), index_col=0)  # MW
 
         # read other parameters
@@ -48,6 +54,9 @@ class PDS:
         self.factorize_demands()
         self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
         self.construct_generators_params()
+        self.construct_batteries_params()
+
+        # unit conversion in the end of the initiation
         self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
 
     def factorize_demands(self):
@@ -75,8 +84,16 @@ class PDS:
         self.lines['x_pu'] = self.lines['x_ohm'] / z
         self.dem_active = (self.dem_active * 1000) / (self.power_base_mva * 10 ** 6)
         self.dem_reactive = (self.dem_reactive * 1000) / (self.power_base_mva * 10 ** 6)
+
         self.bus['max_gen_kw'] = (self.bus['max_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
         self.bus['min_gen_kw'] = (self.bus['min_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
+
+        self.bus['min_storage_kwh'] = (self.bus['min_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_storage_kwh'] = (self.bus['max_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_power_kw'] = (self.bus['max_power_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['init_storage_kwh'] = (self.bus['init_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['final_storage_kwh'] = (self.bus['final_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
+
         return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
     def get_bus_lines(self, bus_id):
@@ -111,3 +128,7 @@ class PDS:
         self.bus[['a', 'b', 'c']] = self.bus[['a', 'b', 'c']].fillna(0)
         self.bus['min_gen_kw'] = self.bus[['min_gen_kw']].fillna(0)
         self.bus['max_gen_kw'] = self.bus[['max_gen_kw']].fillna(np.inf)
+
+    def construct_batteries_params(self):
+        self.bus = pd.merge(self.bus, self.batteries, left_index=True, right_index=True, how='outer')
+        self.bus[self.batteries.columns] = self.bus[self.batteries.columns].fillna(0)

@@ -1,0 +1,2 @@
+﻿bus_id,min_storage_kwh,max_storage_kwh,max_power_kw,init_storage_kwh,final_storage_kwh
+26,0,5000,500,4000,0
