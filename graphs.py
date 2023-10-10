@@ -45,25 +45,35 @@ class OptGraphs:
 
         plt.subplots_adjust(bottom=0.04, top=0.96, left=0.04, right=0.96)
         plt.suptitle(title)
+        return fig
 
     def bus_voltage(self, t, ax=None):
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 4))
 
         ax.bar(range(self.pds.n_bus), self.x['v'].get()[:, t])
+        return fig
 
-    def plot_all_tanks(self):
+    def plot_all_tanks(self, fig=None, leg_label=None):
         n = self.wds.n_tanks
         ncols = int(math.ceil(math.sqrt(n)))
         nrows = int(math.ceil(n / ncols))
 
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
-        axes = axes.ravel()
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
+            axes = axes.ravel()
+        else:
+            axes = fig.axes
+
         for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
             values = [row['init_vol']] + list(self.x['vol'].get()[i, :])
-            axes[i] = time_series(x=range(len(values)+1), y=values, title=f'Tank {tank_id}', ax=axes[i])
+            title = f'Tank {tank_id}'
+            axes[i] = time_series(x=range(len(values)), y=values,
+                                  title=title, ax=axes[i], ylabel=f'Volume ($m^3)$', leg_label=leg_label)
+            axes[i].legend()
 
         plt.tight_layout()
+        return fig
 
     def plot_all_pumps(self):
         n = self.wds.n_pumps
@@ -77,6 +87,7 @@ class OptGraphs:
             axes[i] = time_series(x=range(len(values)), y=values, title=f'Pump {pump_id}', ax=axes[i])
 
         plt.tight_layout()
+        return fig
 
     def pumps_gantt(self, pumps_names: list):
         df = pd.DataFrame(self.x['pumps'].get()).T
@@ -97,16 +108,26 @@ class OptGraphs:
         ax.xaxis.grid(True)
         ax.set_yticks([i for i in range(len(pumps_names))])
         ax.set_yticklabels(pumps_names)
+        return fig
 
-    def all_ts(self, x_name, factor=1):
-        x = self.x[x_name].get() * factor
+    def plot_all_generators(self, fig=None, leg_label=''):
+        gen_idx = self.pds.bus.loc[self.pds.bus['type'] == 'gen'].index
+        x = self.x['gen_p'].get()[gen_idx, :] * self.pds.pu_to_kw
+        x = x[~np.all(np.isclose(x, 0, atol=0.0001), axis=1)]
 
         ncols = int(math.ceil(math.sqrt(x.shape[0])))
         nrows = int(math.ceil(x.shape[0] / ncols))
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
-        axes = axes.ravel()
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
+            axes = axes.ravel()
+        else:
+            axes = fig.axes
+
         for i in range(x.shape[0]):
-            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i])
+            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)', leg_label=leg_label)
+            axes[i].legend()
+
+        return fig
 
 
 def plot_demands(pds, wds):
@@ -121,14 +142,15 @@ def plot_demands(pds, wds):
     axes[1].set_ylabel('Water demand (CMH)')
 
     fig.align_ylabels()
+    return fig
 
 
-def time_series(x, y, ax=None, ylabel='', title=''):
+def time_series(x, y, ax=None, ylabel='', title='', leg_label=''):
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 4))
 
-    ax.plot(x, y)
-    ax.grid()
+    ax.plot(x, y, label=leg_label)
+    ax.grid(True)
 
     if ylabel:
         ax.set_ylabel(ylabel)
