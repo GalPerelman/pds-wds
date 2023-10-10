@@ -43,6 +43,7 @@ class PDS:
         self.n_bus = len(self.bus)
         self.n_lines = len(self.lines)
         self.n_psh = len(self.psh)
+        self.n_generators = len(self.generators)
 
         self.factorize_demands()
         self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
