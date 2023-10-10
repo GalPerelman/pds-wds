@@ -133,11 +133,9 @@ class Model:
         self.model.st(self.x['gen_p'] - max_power <= 0)
 
     def bus_balance(self, x_pumps):
-        r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
-                                       param='r_pu')
-        x = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
-                                       param='x_pu')
-        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
+        r = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='r_pu')
+        x = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='x_pu')
+        a = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
 
         bus_pumps = self.pds.construct_bus_pumps_mat()
         power_mat = self.wds.combs[[_ for _ in self.wds.combs.columns if _.startswith('power')]].fillna(0).values.T
@@ -174,7 +172,7 @@ class Model:
     def energy_conservation(self):
         r = self.pds.lines['r_pu'].values.reshape(1, -1)
         x = self.pds.lines['x_pu'].values.reshape(1, -1)
-        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
+        a = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
         self.model.st(a.T @ self.x['v']
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T

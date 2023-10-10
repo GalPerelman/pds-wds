@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-def get_connectivity_mat(edges_data: pd.DataFrame, from_col: str = 'from', to_col: str = 'to', direction='', param=''):
+def connectivity_mat(edges_data: pd.DataFrame, from_col: str = 'from', to_col: str = 'to', direction='', param=''):
     n_edges = len(edges_data)
     n_nodes = pd.concat([edges_data[from_col], edges_data[to_col]]).nunique()
 
