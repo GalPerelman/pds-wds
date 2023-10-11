@@ -57,8 +57,10 @@ class Model:
     def declare_vars(self):
         gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
         gen_q = self.model.dvar((self.pds.n_bus, self.t))  # reactive power generation
-        psh_y = self.model.dvar((self.pds.n_psh, self.t))  # psh_y = pumped storage hydropower injection
-        psh_h = self.model.dvar((self.pds.n_psh, self.t))  # psh_y = pumped storage hydropower consumption
+        bat_p = self.model.dvar((self.pds.n_bus, self.t))  # batteries charge - positive when filling
+        bat_e = self.model.dvar((self.pds.n_bus, self.t))  # batteries state
+        psh_y = self.model.dvar((self.pds.n_psh, self.t))  # psh_y - pumped storage hydropower injection
+        psh_h = self.model.dvar((self.pds.n_psh, self.t))  # psh_y - pumped storage hydropower consumption
 
         v = self.model.dvar((self.pds.n_bus, self.t))  # buses squared voltage
         I = self.model.dvar((self.pds.n_lines, self.t))  # lines squared current flow
@@ -71,15 +73,17 @@ class Model:
         self.model.st(psh_h >= 0)
         self.model.st(I >= 0)
 
-        x_pumps = self.model.dvar((self.wds.n_combs, self.t), vtype='B')
+        x_pumps = self.model.dvar((self.wds.n_combs, self.t), vtype='C')
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
 
         self.model.st(0 <= x_pumps)
         self.model.st(x_pumps <= 1)
         self.model.st(vol >= 0)
 
-        return {'gen_p': gen_p, 'gen_q': gen_q, 'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
-                'pumps': x_pumps, 'vol': vol}
+        return {'gen_p': gen_p, 'gen_q': gen_q, 'bat_p': bat_p, 'bat_e': bat_e,
+                'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
+                'pumps': x_pumps, 'vol': vol
+                }
 
     def get_wds_cost(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
@@ -112,6 +116,8 @@ class Model:
         pds_cost = self.get_pds_cost()
         self.objective_func(wds_cost, pds_cost)
         self.power_generation_bounds()
+        self.batteries_bounds()
+        self.batteries_balance()
         self.bus_balance(x_pumps=x_pumps)
         self.energy_conservation()
         self.voltage_bounds()
@@ -132,6 +138,21 @@ class Model:
         self.model.st(- self.x['gen_p'] + min_power <= 0)
         self.model.st(self.x['gen_p'] - max_power <= 0)
 
+    def batteries_bounds(self):
+        # charging rate constraint
+        self.model.st(self.x['bat_p'] - self.pds.bus['max_power'].values.reshape(-1, 1) <= 0)
+        self.model.st(- self.pds.bus['max_power'].values.reshape(-1, 1) - self.x['bat_p'] <= 0)
+
+        # energy storage constraint
+        self.model.st(self.x['bat_e'] - self.pds.bus['max_storage'].values.reshape(-1, 1) <= 0)
+        self.model.st(- self.x['bat_e'] + self.pds.bus['min_storage'].values.reshape(-1, 1) <= 0)
+
+    def batteries_balance(self):
+        mat = np.triu(np.ones((self.t, self.t)))
+        init_mat = np.zeros((self.pds.n_bus, self.t))
+        init_mat[:, 0] = self.pds.bus['init_storage'].values
+        self.model.st((self.x['bat_p'] @ mat) + init_mat - self.x['bat_e'] == 0)
+
     def bus_balance(self, x_pumps):
         r = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='r_pu')
         x = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='x_pu')
@@ -145,11 +166,14 @@ class Model:
         else:
             pumps_power = bus_pumps @ power_mat @ self.x['pumps']
 
-        self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
-                      - r @ self.x['I']
-                      - self.pds.dem_active.values - pumps_power
-                      + self.pds.bus.loc[:, 'G'].values @ self.x['v']
-                      == 0)
+        self.model.st(
+            self.pds.gen_mat @ self.x['gen_p']                  # generators inflow
+            - self.pds.bat_mat @ self.x['bat_p']                # outflow charge batteries - bat_p positive for fill
+            + a @ self.x['p'] - r @ self.x['I']                 # inflow from lines minus lines losses
+            - self.pds.dem_active.values - pumps_power          # outflow demand
+            + self.pds.bus.loc[:, 'G'].values @ self.x['v']     # local losses
+            == 0
+        )
 
         self.model.st(self.pds.gen_mat @ self.x['gen_q'] + a @ self.x['q']
                       - x @ self.x['I']
@@ -215,7 +239,7 @@ class Model:
 
             tank_mat = self.construct_tank_mat()
             lhs[self.t * i: self.t * (i + 1),
-                (self.wds.n_combs + i) * self.t: (self.wds.n_combs + i + 1) * self.t] = tank_mat
+            (self.wds.n_combs + i) * self.t: (self.wds.n_combs + i + 1) * self.t] = tank_mat
 
             dem = self.wds.get_tank_demand(tank_id).to_numpy()[:, np.newaxis]
             rhs[self.t * i: self.t * (i + 1)] = dem
