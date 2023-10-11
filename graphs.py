@@ -56,12 +56,12 @@ class OptGraphs:
 
     def plot_all_tanks(self, fig=None, leg_label=None):
         n = self.wds.n_tanks
-        ncols = int(math.ceil(math.sqrt(n)))
-        nrows = int(math.ceil(n / ncols))
+        ncols = max(1, int(math.ceil(math.sqrt(n))))
+        nrows = max(1, int(math.ceil(n / ncols)))
 
         if fig is None:
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
-            axes = axes.ravel()
+            axes = np.atleast_2d(axes).ravel()
         else:
             axes = fig.axes
 
@@ -77,11 +77,11 @@ class OptGraphs:
 
     def plot_all_pumps(self):
         n = self.wds.n_pumps
-        ncols = int(math.ceil(math.sqrt(n)))
-        nrows = int(math.ceil(n / ncols))
+        ncols = max(1, int(math.ceil(math.sqrt(n))))
+        nrows = max(1, int(math.ceil(n / ncols)))
 
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
-        axes = axes.ravel()
+        axes = np.atleast_2d(axes).ravel()
         for i, (pump_id, row) in enumerate(self.wds.pumps.iterrows()):
             values = (self.x['alpha'].get() * self.opt.pl_flow_mat).sum(axis=-1)[pump_id, :]
             axes[i] = time_series(x=range(len(values)), y=values, title=f'Pump {pump_id}', ax=axes[i])
@@ -115,16 +115,36 @@ class OptGraphs:
         x = self.x['gen_p'].get()[gen_idx, :] * self.pds.pu_to_kw
         x = x[~np.all(np.isclose(x, 0, atol=0.0001), axis=1)]
 
-        ncols = int(math.ceil(math.sqrt(x.shape[0])))
-        nrows = int(math.ceil(x.shape[0] / ncols))
+        ncols = max(1, int(math.ceil(math.sqrt(x.shape[0]))))
+        nrows = max(1, int(math.ceil(x.shape[0] / ncols)))
         if fig is None:
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
-            axes = axes.ravel()
+            axes = np.atleast_2d(axes).ravel()
         else:
             axes = fig.axes
 
         for i in range(x.shape[0]):
             axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)', leg_label=leg_label)
+            axes[i].legend()
+
+        return fig
+
+    def plot_batteries(self, fig=None, leg_label=''):
+        bat_idx = self.pds.batteries.index.tolist()
+        x = self.x['bat_e'].get()[bat_idx, :] * self.pds.pu_to_kw
+        x = x[~np.all(np.isclose(x, 0, atol=0.0001), axis=1)]
+
+        ncols = max(1, int(math.ceil(math.sqrt(x.shape[0]))))
+        nrows = max(1, int(math.ceil(x.shape[0] / ncols)))
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
+            axes = np.atleast_2d(axes).ravel()
+
+        else:
+            axes = fig.axes
+
+        for i in range(x.shape[0]):
+            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Energy (kWh)', leg_label=leg_label)
             axes[i].legend()
 
         return fig
