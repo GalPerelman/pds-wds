@@ -52,7 +52,8 @@ class PDS:
         self.n_generators = len(self.generators)
 
         self.factorize_demands()
-        self.gen_mat = utils.get_mat_for_type(self.bus, "gen")
+        self.gen_mat = utils.get_mat_for_type(self.bus, self.generators)
+        self.bat_mat = utils.get_mat_for_type(self.bus, self.batteries)
         self.construct_generators_params()
         self.construct_batteries_params()
 
@@ -88,11 +89,11 @@ class PDS:
         self.bus['max_gen_kw'] = (self.bus['max_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
         self.bus['min_gen_kw'] = (self.bus['min_gen_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
 
-        self.bus['min_storage_kwh'] = (self.bus['min_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['max_storage_kwh'] = (self.bus['max_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['max_power_kw'] = (self.bus['max_power_kw'] * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['init_storage_kwh'] = (self.bus['init_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
-        self.bus['final_storage_kwh'] = (self.bus['final_storage_kwh'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['min_storage'] = (self.bus['min_storage'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_storage'] = (self.bus['max_storage'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['max_power'] = (self.bus['max_power'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['init_storage'] = (self.bus['init_storage'] * 1000) / (self.power_base_mva * 10 ** 6)
+        self.bus['final_storage'] = (self.bus['final_storage'] * 1000) / (self.power_base_mva * 10 ** 6)
 
         return self.power_base_mva * 10 ** 6 / 1000, z ** (-1)
 
