@@ -59,8 +59,8 @@ class Model:
         gen_q = self.model.dvar((self.pds.n_bus, self.t))  # reactive power generation
         bat_p = self.model.dvar((self.pds.n_bus, self.t))  # batteries charge - positive when filling
         bat_e = self.model.dvar((self.pds.n_bus, self.t))  # batteries state
-        psh_y = self.model.dvar((self.pds.n_psh, self.t))  # psh_y - pumped storage hydropower injection
-        psh_h = self.model.dvar((self.pds.n_psh, self.t))  # psh_y - pumped storage hydropower consumption
+        penalty_p = self.model.dvar((self.pds.n_bus, self.t))  # penalty for gap between demand and supply
+        penalty_q = self.model.dvar((self.pds.n_bus, self.t))  # penalty for gap between demand and supply
 
         v = self.model.dvar((self.pds.n_bus, self.t))  # buses squared voltage
         I = self.model.dvar((self.pds.n_lines, self.t))  # lines squared current flow
@@ -69,9 +69,9 @@ class Model:
 
         self.model.st(gen_p >= 0)
         self.model.st(gen_q >= 0)
-        self.model.st(psh_y >= 0)
-        self.model.st(psh_h >= 0)
         self.model.st(I >= 0)
+        self.model.st(penalty_p >= 0)
+        self.model.st(penalty_q >= 0)
 
         x_pumps = self.model.dvar((self.wds.n_combs, self.t), vtype='C')
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
@@ -80,8 +80,8 @@ class Model:
         self.model.st(x_pumps <= 1)
         self.model.st(vol >= 0)
 
-        return {'gen_p': gen_p, 'gen_q': gen_q, 'bat_p': bat_p, 'bat_e': bat_e,
-                'psh_y': psh_y, 'psh_h': psh_h, 'v': v, 'I': I, 'p': p, 'q': q,
+        return {'gen_p': gen_p, 'gen_q': gen_q, 'bat_p': bat_p, 'bat_e': bat_e, 'v': v, 'I': I, 'p': p, 'q': q,
+                'penalty_p': penalty_p, 'penalty_q': penalty_q,
                 'pumps': x_pumps, 'vol': vol
                 }
 
@@ -118,6 +118,7 @@ class Model:
         self.power_generation_bounds()
         self.batteries_bounds()
         self.batteries_balance()
+        self.penalty_bounds(ub=0)
         self.bus_balance(x_pumps=x_pumps)
         self.energy_conservation()
         self.voltage_bounds()
@@ -128,6 +129,14 @@ class Model:
 
         self.one_comb_only()
         self.mass_balance()
+
+    def emergency_objective(self):
+        """
+        Objective function for resilience optimization
+        Minimization of the gap between demand and supply
+        The bus power balance is formulated as soft constraint
+        """
+        pass
 
     def objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
@@ -172,6 +181,7 @@ class Model:
             + a @ self.x['p'] - r @ self.x['I']                 # inflow from lines minus lines losses
             - self.pds.dem_active.values - pumps_power          # outflow demand
             + self.pds.bus.loc[:, 'G'].values @ self.x['v']     # local losses
+            + self.x['penalty_p']
             == 0
         )
 
@@ -179,7 +189,11 @@ class Model:
                       - x @ self.x['I']
                       - self.pds.dem_reactive.values
                       + self.pds.bus.loc[:, 'B'].values @ self.x['v']
+                      + self.x['penalty_q']
                       == 0)
+
+    def penalty_bounds(self, ub):
+        self.model.st(self.x['penalty_p'].sum().sum() <= ub)
 
     def voltage_bounds(self):
         self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) <= 0)
@@ -275,15 +289,15 @@ class Model:
         return wds_cost, grid_cost, generation_cost
 
 
-def solve_water():
-    model = Model(pds_data=os.path.join('data', 'pds'), wds_data=os.path.join('data', 'wds_wells'), t=24)
+def solve_water(pds_dir, wds_dir):
+    model = Model(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
     model.build_water_problem()
     model.solve()
     return model
 
 
-def solve_combined(x_pumps=None):
-    model = Model(pds_data=os.path.join('data', 'pds'), wds_data=os.path.join('data', 'wds_wells'), t=24)
+def solve_combined(pds_dir, wds_dir, x_pumps=None):
+    model = Model(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
     model.build_combined_problem(x_pumps)
     model.solve()
     return model
