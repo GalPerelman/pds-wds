@@ -40,6 +40,11 @@ class PDS:
         self.generators = pd.read_csv(os.path.join(self.data_folder, 'generators.csv'), index_col=0)
         self.batteries = pd.read_csv(os.path.join(self.data_folder, 'batteries.csv'), index_col=0)
         self.max_gen_profile = pd.read_csv(os.path.join(self.data_folder, 'max_gen_profile.csv'), index_col=0)  # MW
+        try:
+            # optional input
+            self.bus_criticality = pd.read_csv(os.path.join(self.data_folder, 'criticality.csv'), index_col=0)
+        except FileNotFoundError:
+            self.bus_criticality = None
 
         # read other parameters
         with open(os.path.join(self.data_folder, 'params.yaml'), 'r') as f:

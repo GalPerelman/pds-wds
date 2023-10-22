@@ -105,20 +105,42 @@ class Model:
 
         return const_term + generation_cost
 
-    def build_water_problem(self):
-        wds_cost = self.get_wds_cost()
-        self.objective_func(wds_cost, 0)
+    def build_water_problem(self, obj, tw=1):
+        if obj == "cost":
+            wds_cost = self.get_wds_cost()
+            self.cost_objective_func(wds_cost, 0)
+        elif obj == "emergency":
+            wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
+            power = (tw * wds_power).sum()
+            self.model.min(power)
+
         self.one_comb_only()
         self.mass_balance()
 
     def build_combined_problem(self, x_pumps=None):
         wds_cost = 0
         pds_cost = self.get_pds_cost()
-        self.objective_func(wds_cost, pds_cost)
+        self.cost_objective_func(wds_cost, pds_cost)
         self.power_generation_bounds()
         self.batteries_bounds()
         self.batteries_balance()
         self.penalty_bounds(ub=0)
+        self.bus_balance(x_pumps=x_pumps)
+        self.energy_conservation()
+        self.voltage_bounds()
+        self.power_flow_constraint()
+
+        if x_pumps is not None:
+            self.model.st(self.x['pumps'] - x_pumps == 0)
+
+        self.one_comb_only()
+        self.mass_balance()
+
+    def build_combined_resilience_problem(self, x_pumps=None):
+        self.emergency_objective()
+        self.power_generation_bounds()
+        self.batteries_bounds()
+        self.batteries_balance()
         self.bus_balance(x_pumps=x_pumps)
         self.energy_conservation()
         self.voltage_bounds()
@@ -135,10 +157,12 @@ class Model:
         Objective function for resilience optimization
         Minimization of the gap between demand and supply
         The bus power balance is formulated as soft constraint
+        Objective units are kWhr - penalty is power (kw) which is summed over time
         """
-        pass
+        obj = (self.x['penalty_p'] * self.pds.bus_criticality.values * self.pds.pu_to_kw).sum()
+        self.model.min(obj)
 
-    def objective_func(self, wds_obj, pds_obj):
+    def cost_objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
 
     def power_generation_bounds(self):
@@ -193,7 +217,7 @@ class Model:
                       == 0)
 
     def penalty_bounds(self, ub):
-        self.model.st(self.x['penalty_p'].sum().sum() <= ub)
+        self.model.st(self.x['penalty_p'].sum() <= ub)
 
     def voltage_bounds(self):
         self.model.st(self.x['v'] - self.pds.bus['Vmax_pu'].values.reshape(-1, 1) <= 0)
