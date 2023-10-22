@@ -14,12 +14,19 @@ class OptGraphs:
         self.wds = opt.wds
         self.x = self.opt.x
 
-    def plot_graph(self, edges_data, coords, from_col, to_col, edges_values={}, nodes_values={}, title=''):
+    def plot_graph(self, edges_data, coords, from_col, to_col, t, edges_x='', edges_factor=1,
+                   nodes_x='', nodes_factor=1, title=''):
+
         df = edges_data.copy()
-        if edges_values:
+        if edges_x:
+            edges_values = {i: round(self.x[edges_x].get()[i, t] * edges_factor, 1) for i in range(len(edges_data))}
             df['w'] = edges_values.values()
         else:
             df['w'] = 1
+
+        num_nodes = len(pd.unique(edges_data[[from_col, to_col]].values.ravel('K')))
+        nodes_values = {i: round(self.x[nodes_x].get()[i, t] * nodes_factor, 1) for i in range(num_nodes)}
+
         G = nx.from_pandas_edgelist(df, source=from_col, target=to_col, edge_attr='w')
 
         nx.set_node_attributes(G, coords, 'coord')
@@ -35,11 +42,11 @@ class OptGraphs:
         fig, ax = plt.subplots(figsize=(12, 5))
         nx.draw_networkx(G, pos=coords, ax=ax, **options)
 
-        if nodes_values:
+        if nodes_x:
             labels_pos = {k: (v[0] + 0.2, v[1] + 0.15) for k, v in coords.items()}
             nx.draw_networkx_labels(G, pos=labels_pos, ax=ax, labels=nodes_values, font_size=8, font_color="blue")
 
-        if edges_values:
+        if edges_x:
             edge_labels = {k: round(v, 1) for k, v in nx.get_edge_attributes(G, 'w').items()}
             nx.draw_networkx_edge_labels(G, coords, ax=ax, edge_labels=edge_labels, font_size=8)
 
@@ -148,6 +155,18 @@ class OptGraphs:
             axes[i].legend()
 
         return fig
+
+    def plot_penalty(self, ax=None, leg_label=''):
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        p = self.x['penalty_p'].get().sum(axis=0) * self.pds.pu_to_kw
+        ax.bar(range(len(p)), p, edgecolor='k', alpha=0.5)
+        ax.plot([], [], ' ', label=f"{leg_label}\nPenalty: {p.sum():.0f} kWhr")
+
+        ax.set_ylabel('Power (kW)')
+        ax.legend(handletextpad=-2.0, handlelength=0, frameon=False)
+        return ax
 
 
 def plot_demands(pds, wds):
