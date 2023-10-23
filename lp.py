@@ -41,6 +41,10 @@ class WaterNet:
     def level_to_vol(diameter, level):
         return level * np.pi * (diameter ** 2) / 4
 
+    def get_pumped_vol(self, x_pumps):
+        vol = self.combs.loc[:, "flow"].values.reshape(1, -1) @ x_pumps
+        return vol
+
 
 class Model:
     def __init__(self, pds_data: str, wds_data: str, t: int):
