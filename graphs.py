@@ -160,7 +160,7 @@ class OptGraphs:
         if ax is None:
             fig, ax = plt.subplots()
 
-        p = self.x['penalty_p'].get().sum(axis=0) * self.pds.pu_to_kw
+        p = (self.pds.bus_criticality * self.x['penalty_p'].get() * self.pds.pu_to_kw).sum(axis=0)
         ax.bar(range(len(p)), p, edgecolor='k', alpha=0.5)
         ax.plot([], [], ' ', label=f"{leg_label}\nPenalty: {p.sum():.0f} kWhr")
 
