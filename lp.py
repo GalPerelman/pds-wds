@@ -195,13 +195,12 @@ class Model:
         x = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in', param='x_pu')
         a = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
 
-        bus_pumps = self.pds.construct_bus_pumps_mat()
         power_mat = self.wds.combs[[_ for _ in self.wds.combs.columns if _.startswith('power')]].fillna(0).values.T
         power_mat = (power_mat * 1000) / (self.pds.power_base_mva * 10 ** 6)
         if x_pumps is not None:
-            pumps_power = bus_pumps @ power_mat @ x_pumps
+            pumps_power = self.pds.pumps_bus.values @ power_mat @ x_pumps
         else:
-            pumps_power = bus_pumps @ power_mat @ self.x['pumps']
+            pumps_power = self.pds.pumps_bus.values @ power_mat @ self.x['pumps']
 
         self.model.st(
             self.pds.gen_mat @ self.x['gen_p']                  # generators inflow

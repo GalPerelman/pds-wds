@@ -40,6 +40,7 @@ class PDS:
         self.generators = pd.read_csv(os.path.join(self.data_folder, 'generators.csv'), index_col=0)
         self.batteries = pd.read_csv(os.path.join(self.data_folder, 'batteries.csv'), index_col=0)
         self.max_gen_profile = pd.read_csv(os.path.join(self.data_folder, 'max_gen_profile.csv'), index_col=0)  # MW
+        self.pumps_bus = pd.read_csv(os.path.join(self.data_folder, 'pumps_bus.csv'), index_col=0).fillna(0)
         try:
             # optional input
             self.bus_criticality = pd.read_csv(os.path.join(self.data_folder, 'criticality.csv'), index_col=0)
