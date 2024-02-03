@@ -134,7 +134,7 @@ class PDS:
         self.bus = pd.merge(self.bus, self.generators, left_index=True, right_index=True, how='outer')
         self.bus[['a', 'b', 'c']] = self.bus[['a', 'b', 'c']].fillna(0)
         self.bus['min_gen_kw'] = self.bus[['min_gen_kw']].fillna(0)
-        self.bus['max_gen_kw'] = self.bus[['max_gen_kw']].fillna(np.inf)
+        self.bus['max_gen_kw'] = self.bus[['max_gen_kw']].fillna(0)
 
     def construct_batteries_params(self):
         self.bus = pd.merge(self.bus, self.batteries, left_index=True, right_index=True, how='outer')
