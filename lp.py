@@ -30,6 +30,8 @@ class WDS:
 
         self.n_combs = len(self.combs)
         self.n_tanks = len(self.tanks)
+        self.n_stations = self.combs['station'].nunique()
+        self.pumps_combs = self.get_pumps_combs_mat()
 
         self.tanks['init_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['init_level'])
         self.tanks['min_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['min_level'])
@@ -46,6 +48,12 @@ class WDS:
         vol = self.combs.loc[:, "flow"].values.reshape(1, -1) @ x_pumps
         return vol
 
+    def get_pumps_combs_mat(self):
+        """
+        Build a connectivity matrix between individual pumps to pump combinations
+        """
+        mat = self.combs[[_ for _ in self.combs.columns if _.startswith('pump_')]].fillna(0).values.T
+        return mat
 
 
 class Optimizer:
