@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import pandas as pd
 
@@ -52,7 +54,15 @@ def get_dt_mat(n):
     return mat
 
 
-def linear_coefficients_from_two_pints(p1, p2):
+def linear_coefficients_from_two_points(p1, p2):
     a = (p2[1] - p1[1]) / (p2[0] - p1[0])
     b = p1[1] - a * p1[0]
     return a, b
+
+
+def normalize_mat(mat):
+    return (mat - np.min(mat)) / (np.max(mat) - np.min(mat))
+
+
+def get_subsets(elements, subsets_size):
+    return [list(combination) for combination in itertools.combinations(elements, subsets_size)]

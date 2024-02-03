@@ -4,7 +4,7 @@ import gurobipy.gurobipy
 import numpy as np
 import pandas as pd
 import code
-import matplotlib.pyplot as plt
+import warnings
 import rsome
 from rsome import ro
 from rsome import grb_solver as grb
@@ -69,6 +69,9 @@ class Optimizer:
         self.model = ro.Model()
         self.x = self.declare_vars()
 
+        self.objective = None
+        self.status = None
+
     def declare_vars(self):
         gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
         gen_q = self.model.dvar((self.pds.n_bus, self.t))  # reactive power generation
@@ -120,14 +123,33 @@ class Optimizer:
 
         return const_term + generation_cost
 
-    def build_water_problem(self, obj, tw=1):
+    def build_water_problem(self, obj, w=1):
         if obj == "cost":
             wds_cost = self.get_wds_cost()
             self.cost_objective_func(wds_cost, 0)
         elif obj == "emergency":
-            wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
-            power = (tw * wds_power).sum()
-            self.model.min(power)
+            # version 1
+            # (1 x n_combs) @ (n_combs x T) = (1 x T)
+            # wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
+            # power = (tw * wds_power).sum()
+            # self.model.min(power)
+
+            # version 2
+            # (n_bus x n_pumps) @ (n_pumps x n_combs) @ (n_combs x T)
+            # power_mat = self.wds.combs[[_ for _ in self.wds.combs.columns if _.startswith('power')]].fillna(0).values.T
+            # power_mat = (power_mat * 1000) / (self.pds.power_base_mva * 10 ** 6)
+            # pumps_power = self.pds.pumps_bus.values @ power_mat @ self.x['pumps']
+            # w - weights of penalties, larger values means larger reduction in pumping
+            # w should be with size of (n_bus x T)
+            # pumps_penalized_power = w @ pumps_power
+
+            # version 3
+            # (T x n_pumps) @ (n_pumps x n_combs) @ (n_combs x T)
+            np.set_printoptions(suppress=True)
+            wds_power = self.wds.pumps_combs @ self.x['pumps']
+            pumps_penalized_power = (np.ones(w.shape) - w).T @ wds_power
+
+            self.model.min(pumps_penalized_power.sum())
 
         self.one_comb_only()
         self.mass_balance()
@@ -214,11 +236,11 @@ class Optimizer:
             pumps_power = self.pds.pumps_bus.values @ power_mat @ self.x['pumps']
 
         self.model.st(
-            self.pds.gen_mat @ self.x['gen_p']                  # generators inflow
-            - self.pds.bat_mat @ self.x['bat_p']                # outflow charge batteries - bat_p positive for fill
-            + a @ self.x['p'] - r @ self.x['I']                 # inflow from lines minus lines losses
-            - self.pds.dem_active.values - pumps_power          # outflow demand
-            + self.pds.bus.loc[:, 'G'].values @ self.x['v']     # local losses
+            self.pds.gen_mat @ self.x['gen_p']  # generators inflow
+            - self.pds.bat_mat @ self.x['bat_p']  # outflow charge batteries - bat_p positive for fill
+            + a @ self.x['p'] - r @ self.x['I']  # inflow from lines minus lines losses
+            - self.pds.dem_active.values - pumps_power  # outflow demand
+            + self.pds.bus.loc[:, 'G'].values @ self.x['v']  # local losses
             + self.x['penalty_p']
             == 0
         )
@@ -253,6 +275,9 @@ class Optimizer:
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T
                       == 0)
+
+    def disable_power_line(self, line_idx):
+        self.model.st(self.x['p'][line_idx, :] == 0)
 
     def one_comb_only(self):
         for station in self.wds.combs['station'].unique():
