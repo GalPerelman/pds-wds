@@ -1,0 +1,5 @@
+﻿bus_id,min_storage,max_storage,max_power,init_storage,final_storage
+23,0,2000,800,1000,0
+26,0,2000,800,1000,0
+7,0,2000,800,1000,0
+19,0,2000,800,1000,0
