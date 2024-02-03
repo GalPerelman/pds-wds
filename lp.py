@@ -1,5 +1,6 @@
 import os.path
 
+import gurobipy.gurobipy
 import numpy as np
 import pandas as pd
 import code
@@ -13,7 +14,7 @@ import utils
 from pds import PDS
 
 
-class WaterNet:
+class WDS:
     """
     This class is structured for linear optimization of the wds operation
     While the class in wds.py is more general
@@ -46,14 +47,16 @@ class WaterNet:
         return vol
 
 
-class Model:
-    def __init__(self, pds_data: str, wds_data: str, t: int):
+
+class Optimizer:
+    def __init__(self, pds_data: str, wds_data: str, t: int, display=True):
         self.pds_data = pds_data
         self.wds_data = wds_data
         self.t = t
+        self.display = display
 
         self.pds = PDS(self.pds_data)
-        self.wds = WaterNet(self.wds_data)
+        self.wds = WDS(self.wds_data)
 
         self.model = ro.Model()
         self.x = self.declare_vars()
@@ -77,7 +80,7 @@ class Model:
         self.model.st(penalty_p >= 0)
         self.model.st(penalty_q >= 0)
 
-        x_pumps = self.model.dvar((self.wds.n_combs, self.t), vtype='C')
+        x_pumps = self.model.dvar((self.wds.n_combs, self.t))
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
 
         self.model.st(0 <= x_pumps)
@@ -295,11 +298,22 @@ class Model:
                       == np.squeeze(rhs))
 
     def solve(self):
-        self.model.solve(grb, display=False)
-        obj, status = self.model.solution.objval, self.model.solution.status
-        wds_cost, grid_cost, generation_cost = self.get_systemwise_costs()
-        print(f'Objective: {obj:.2f} | WDS: {wds_cost:.2f} | Generators {generation_cost:.2f} | Grid {grid_cost:.2f}')
-        print('======================================================================================')
+        # self.model.do_math().to_lp('model_scale')
+        self.model.solve(grb, display=False, params={"TimeLimit": 500, 'OptimalityTol': 10**-8})
+        self.objective, self.status = self.model.solution.objval, self.model.solution.status
+        if self.status in [gurobipy.gurobipy.GRB.OPTIMAL, gurobipy.gurobipy.GRB.SUBOPTIMAL]:
+            wds_cost, pds_cost, generation_cost = self.get_systemwise_costs()
+            if self.display:
+                print(
+                    f'Objective: {self.objective:.2f} | WDS: {wds_cost:.2f} | Generators {generation_cost:.2f}'
+                    f' | Grid {pds_cost:.2f}')
+                print('======================================================================================')
+        elif self.status in [gurobipy.gurobipy.GRB.INFEASIBLE]:
+            warnings.warn(f"Solution is INFEASIBLE")
+            self.objective = wds_cost = generation_cost = pds_cost = None
+            self.status = gurobipy.gurobipy.GRB.INFEASIBLE
+        else:
+            warnings.warn(f"Solution status warning: {self.status} --> , {GRB_STATUS[self.status]}")
 
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
@@ -317,14 +331,31 @@ class Model:
 
 
 def solve_water(pds_dir, wds_dir):
-    model = Model(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
+    model = Optimizer(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
     model.build_water_problem()
     model.solve()
     return model
 
 
 def solve_combined(pds_dir, wds_dir, x_pumps=None):
-    model = Model(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
+    model = Optimizer(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
     model.build_combined_problem(x_pumps)
     model.solve()
     return model
+
+
+GRB_STATUS = {1: 'LOADED',
+              2: 'OPTIMAL',
+              3: 'INFEASIBLE',
+              4: 'INF_OR_UNBD',
+              5: 'UNBOUNDED',
+              6: 'CUTOFF',
+              7: 'ITERATION_LIMIT',
+              8: 'NODE_LIMIT',
+              9: 'TIME_LIMIT',
+              10: 'SOLUTION_LIMIT',
+              11: 'INTERRUPTED',
+              12: 'NUMERIC',
+              13: 'SUBOPTIMAL',
+              14: 'INPROGRESS',
+              15: 'USER_OBJ_LIMIT'}
