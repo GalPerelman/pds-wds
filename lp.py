@@ -31,6 +31,7 @@ class WDS:
         self.n_combs = len(self.combs)
         self.n_tanks = len(self.tanks)
         self.n_stations = self.combs['station'].nunique()
+        self.n_pumps = len([_ for _ in self.combs.columns if _.startswith('pump_')])
         self.pumps_combs = self.get_pumps_combs_mat()
 
         self.tanks['init_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['init_level'])
@@ -54,6 +55,9 @@ class WDS:
         """
         mat = self.combs[[_ for _ in self.combs.columns if _.startswith('pump_')]].fillna(0).values.T
         return mat
+
+    def factorize_demands(self, factor=1):
+        self.demands *= factor
 
 
 class Optimizer:
