@@ -59,7 +59,7 @@ class PDS:
         self.n_generators = len(self.generators)
         self.n_batteries = len(self.batteries)
 
-        self.factorize_demands()
+        self.factorize_demands(active_factor=self.active_demand_factor, reactive_factor=self.reactive_demand_factor)
         self.gen_mat = utils.get_mat_for_type(self.bus, self.generators)
         self.bat_mat = utils.get_mat_for_type(self.bus, self.batteries)
         self.construct_generators_params()
@@ -68,16 +68,9 @@ class PDS:
         # unit conversion in the end of the initiation
         self.pu_to_kw, self.pu_to_kv = self.convert_to_pu()
 
-    def factorize_demands(self):
-        try:
-            self.dem_active *= self.active_demand_factor
-        except AttributeError:
-            pass
-
-        try:
-            self.dem_reactive *= self.reactive_demand_factor
-        except AttributeError:
-            pass
+    def factorize_demands(self, active_factor=1, reactive_factor=1):
+        self.dem_active *= active_factor
+        self.dem_reactive *= reactive_factor
 
     def convert_to_pu(self):
         """
