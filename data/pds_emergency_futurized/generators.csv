@@ -1,7 +1,7 @@
-﻿bus_id,name,min_gen_kw,max_gen_kw,a,b,c
-0,grid,0,0,0,0,0
-32,local_gen,0,250,1.00E-06,0.2,50
-24,local_pv,0,1000,0,0,0
-17,local_gen,0,250,1.00E-06,0.2,50
-21,local_gen,0,250,1.00E-06,0.2,50
-13,local_pv,0,1000,0,0,0
+﻿bus_id,name,type,min_gen_kw,max_gen_kw,a,b,c
+0,grid,grid,0,0,0,0,0
+32,well1_gen,local_gen,0,250,1.00E-06,0.2,50
+24,pv25,pv,0,1000,0,0,0
+17,well2_gen,local_gen,0,250,1.00E-06,0.2,50
+21,well3_gen,local_gen,0,250,1.00E-06,0.2,50
+13,pv14,pv,0,1000,0,0,0
