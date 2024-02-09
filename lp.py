@@ -61,20 +61,43 @@ class WDS:
 
 
 class Optimizer:
-    def __init__(self, pds_data: str, wds_data: str, t: int, display=True):
+    def __init__(self, pds_data: str, wds_data: str, scenario=None, display=True):
         self.pds_data = pds_data
         self.wds_data = wds_data
-        self.t = t
+        self.scenario = scenario
         self.display = display
+
+        self.t = 24
+        self.outage_lines = []
 
         self.pds = PDS(self.pds_data)
         self.wds = WDS(self.wds_data)
+
+        if self.scenario is not None:
+            self.assign_scenario()
 
         self.model = ro.Model()
         self.x = self.declare_vars()
 
         self.objective = None
         self.status = None
+
+    def assign_scenario(self):
+        self.pds.factorize_demands(active_factor=self.scenario.pds_demand_factor,
+                                   reactive_factor=self.scenario.pds_demand_factor)
+        self.wds.factorize_demands(self.scenario.wds_demand_factor)
+        self.pds.bus.loc[self.pds.bus['type'] == 'pv', 'max_gen_kw'] *= self.scenario.pv_factor
+        self.wds.tanks['init_level'] *= self.scenario.tanks_state.T
+        self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'init_storage'] *= self.scenario.batteries_state.T
+        self.t = self.scenario.t
+        self.outage_lines = self.scenario.outage_lines
+
+        # adjust all pds and wds data to be within the scenario duration
+        self.pds.dem_active = self.pds.dem_active.iloc[:, :self.t]
+        self.pds.dem_reactive = self.pds.dem_reactive.iloc[:, :self.t]
+        self.pds.tariffs = self.pds.tariffs.iloc[:, :self.t]
+        self.wds.demands = self.wds.demands.iloc[:self.t]
+        self.wds.tariffs = self.wds.tariffs.iloc[:self.t]
 
     def declare_vars(self):
         gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
@@ -127,11 +150,13 @@ class Optimizer:
 
         return const_term + generation_cost
 
-    def build_water_problem(self, obj, w=1):
+    def build_water_problem(self, obj, w=None):
         if obj == "cost":
             wds_cost = self.get_wds_cost()
             self.cost_objective_func(wds_cost, 0)
         elif obj == "emergency":
+            if w is None:
+                w = np.ones((self.wds.n_pumps, self.t))
             # version 1
             # (1 x n_combs) @ (n_combs x T) = (1 x T)
             # wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps']
@@ -149,9 +174,8 @@ class Optimizer:
 
             # version 3
             # (T x n_pumps) @ (n_pumps x n_combs) @ (n_combs x T)
-            np.set_printoptions(suppress=True)
             wds_power = self.wds.pumps_combs @ self.x['pumps']
-            pumps_penalized_power = (np.ones(w.shape) - w).T @ wds_power
+            pumps_penalized_power = w.T @ wds_power
 
             self.model.min(pumps_penalized_power.sum())
 
@@ -171,6 +195,9 @@ class Optimizer:
         self.voltage_bounds()
         self.power_flow_constraint()
 
+        for line_idx in self.outage_lines:
+            self.disable_power_line(line_idx)
+
         if x_pumps is not None:
             self.model.st(self.x['pumps'] - x_pumps == 0)
 
@@ -187,6 +214,9 @@ class Optimizer:
         self.voltage_bounds()
         self.power_flow_constraint()
 
+        for line_idx in self.outage_lines:
+            self.disable_power_line(line_idx)
+
         if x_pumps is not None:
             self.model.st(self.x['pumps'] - x_pumps == 0)
 
@@ -200,15 +230,15 @@ class Optimizer:
         The bus power balance is formulated as soft constraint
         Objective units are kWhr - penalty is power (kw) which is summed over time
         """
-        obj = (self.x['penalty_p'] * self.pds.bus_criticality.values * self.pds.pu_to_kw).sum()
+        obj = (self.x['penalty_p'] * self.pds.bus_criticality.iloc[:, :self.t].values * self.pds.pu_to_kw).sum()
         self.model.min(obj)
 
     def cost_objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
 
     def power_generation_bounds(self):
-        min_power = np.multiply(self.pds.bus['min_gen_kw'].values, self.pds.max_gen_profile.T).T.values
-        max_power = np.multiply(self.pds.bus['max_gen_kw'].values, self.pds.max_gen_profile.T).T.values
+        min_power = np.multiply(self.pds.bus['min_gen_kw'].values, self.pds.max_gen_profile.iloc[:, :self.t].T).T.values
+        max_power = np.multiply(self.pds.bus['max_gen_kw'].values, self.pds.max_gen_profile.iloc[:, :self.t].T).T.values
         self.model.st(- self.x['gen_p'] + min_power <= 0)
         self.model.st(self.x['gen_p'] - max_power <= 0)
 

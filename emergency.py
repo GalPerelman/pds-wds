@@ -67,142 +67,134 @@ class PumpLogicConnectivity:
 
 
 class Simulation:
-    def __init__(self, pds_data, wds_data, t, opt_display):
+    def __init__(self, pds_data, wds_data, opt_display, comm_protocol, scenario_const: dict):
         self.pds_data = pds_data
         self.wds_data = wds_data
-        self.t = t
         self.opt_display = opt_display
+        self.comm_protocol = comm_protocol
+        self.scenario_const = scenario_const
 
         # initiate pds and wds objects for data usage in simulation functions
-        self.pds = PDS(self.pds_data)
-        self.wds = WDS(self.wds_data)
+        self.base_pds = PDS(self.pds_data)
+        self.base_wds = WDS(self.wds_data)
+        self.scenario = self.draw_scenario()
 
-    def draw_random_emergency(self, n=1):
-        pds = PDS(self.pds_data)
-        outage_edges = pds.lines.sample(n=n)
-        return outage_edges
+    def draw_scenario(self):
+        s = Scenario(n_tanks=self.base_wds.n_tanks,
+                     n_batteries=self.base_pds.n_batteries,
+                     power_lines=self.base_pds.lines.index.to_list(),
+                     max_outage_lines=2,
+                     **self.scenario_const
+                     )
 
-    def run_individual(self, outage_lines, wds_objective, w=1):
-        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t, display=self.opt_display)
-        model_wds.build_water_problem(obj=wds_objective, w=w)
+        s.draw_random()
+        return s
+
+    def run_individual(self, wds_objective):
+        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
+                              display=self.opt_display)
+        model_wds.build_water_problem(obj=wds_objective)
         model_wds.solve()
-        x_pumps = model_wds.x['pumps'].get()
+        if model_wds.status == gurobipy.gurobipy.GRB.INFEASIBLE or model_wds.status == gurobipy.gurobipy.GRB.INF_OR_UNBD:
+            model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
+                              display=self.opt_display)
 
-        # Non-cooperative - solve resilience problem with given WDS operation
-        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t, display=self.opt_display)
-        for line_idx in outage_lines:
-            model.disable_power_line(line_idx)
-        model.build_combined_resilience_problem(x_pumps=x_pumps)
-        model.solve()
+            model.objective = None
+            model.status = gurobipy.gurobipy.GRB.INFEASIBLE
+
+        else:
+            x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
+
+            # Non-cooperative - solve resilience problem with given WDS operation
+            model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
+                              display=self.opt_display)
+            for line_idx in self.scenario.outage_lines:
+                model.disable_power_line(line_idx)
+            model.build_combined_resilience_problem(x_pumps=x_pumps)
+            model.solve()
+
         return model
 
-    def run_cooperated(self, outage_lines):
-        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t, display=self.opt_display)
-        for line_idx in outage_lines:
+    def run_cooperated(self):
+        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
+                          display=self.opt_display)
+        for line_idx in self.scenario.outage_lines:
             model.disable_power_line(line_idx)
         model.build_combined_resilience_problem()
         model.solve()
         return model
 
-    def get_penalties_for_pumps(self, model):
-        """
-        Get penalties for pumps based on load shedding results
-        """
-        # penalties according to bus shedding
-        # pumps_penalties = (model.x['penalty_p'].get() * model.pds.pu_to_kw) * model.pds.bus_criticality.values
+    def run_communicate(self, comm_protocol):
+        p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
+        w = p.get_pumps_penalties()
+        if w is None:
+            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display)
+            model.objective = None
+            model.status = gurobipy.gurobipy.GRB.INFEASIBLE
 
-        # penalties according to desired pumps schedule
-        # pumps_penalties is of (n_pumps x T) shape
-        pumps_penalties = self.wds.pumps_combs @ model.x['pumps'].get()
-        return pumps_penalties
+        else:
+            model_wds = Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
+            model_wds.build_water_problem(obj="emergency", w=w)
+            model_wds.solve()
+            x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
+            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, x_pumps=x_pumps)
 
-    def get_lines_subsets(self, subset_size):
-        pds = PDS(self.pds_data)
-        return utils.get_subsets(pds.lines.index.to_list(), subset_size)
+        return model
 
-    def run_scenarios(self, subsets):
-        """
-        run a set of scenarios where subst is the group of disabled elements
+    def run_and_record(self):
+        joint_model = self.run_cooperated()
 
-        param:  subset_size - how many disabled lines
-        param:  draw_method - all elements of subset_size if "all" or one random subset of size subset_size if "random"
-        """
-        df = pd.DataFrame()
-        for subset in subsets:
-            # run a fill cooperative problem - for reference
-            joint_model = self.run_cooperated(outage_lines=subset)
+        # run realistic situation where systems not communicate at all
+        independent_model = self.run_individual(wds_objective="cost")
 
-            # run realistic situation where systems not communicate at all
-            independent_model = self.run_individual(outage_lines=subset, wds_objective="cost")
+        # wds based on information from pds
+        communicate_model = self.run_communicate(self.comm_protocol)
 
-            # get pds information to pass to wds
-            if lp.GRB_STATUS[independent_model.status] != "OPTIMAL":
-                # push pumping to future
-                pumps_penalties = np.tile(np.arange(1, 0, -1 / 24), (independent_model.pds.n_bus, 1))
-            else:
-                pumps_penalties = self.get_penalties_for_pumps(joint_model)
+        return {
+            "cooperative": joint_model.objective,
+            "independent": independent_model.objective,
+            "communicate": communicate_model.objective,
+            "t": self.scenario.t,
+            "wds_demand_factor": self.scenario.wds_demand_factor,
+            "pds_demand_factor": self.scenario.pds_demand_factor,
+            "pv_factor": self.scenario.pv_factor,
+            "outage_lines": self.scenario.outage_lines,
+            "tanks_states": self.scenario.tanks_state,
+            "batteries_state": self.scenario.batteries_state
+        }
 
-            # wds based on information from pds
-            communicate_model = self.run_individual(outage_lines=subset, wds_objective="emergency", w=pumps_penalties)
 
-            # record results
-            temp = pd.DataFrame(
-                {"outage_set": subset,
-                 "cooperative": f"{joint_model.objective} ({lp.GRB_STATUS[joint_model.status]})",
-                 "independent": f"{independent_model.objective} ({lp.GRB_STATUS[independent_model.status]})",
-                 "communicate": f"{communicate_model.objective} ({lp.GRB_STATUS[communicate_model.status]})"
-                 }, index=[len(df)]).fillna('INF')
+def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
+    model = Optimizer(pds_data=pds_data, wds_data=wds_data, scenario=scenario, display=display)
+    for line_idx in scenario.outage_lines:
+        model.disable_power_line(line_idx)
+    model.build_combined_resilience_problem(x_pumps=x_pumps)
+    model.solve()
+    return model
 
-            df = pd.concat([df, temp])
-            df.to_csv("one_line_outage.csv")
-        print(df)
 
-    def run(self, outage_lines):
-        # Full cooperation
-        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t)
-        for line_idx in outage_lines:
-            model.disable_power_line(line_idx)
-        model.build_combined_resilience_problem()
-        model.solve()
-        g = graphs.OptGraphs(model)
-        g.plot_penalty()
+def run_n_scenarios(n):
+    results = []
+    for _ in range(n):
+        sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", opt_display=False,
+                         comm_protocol=CommunicateProtocolBasic)
 
-        ########################################################################################################
-        # solve WDS min cost problem - get the WDS policy when ignoring PDS
-        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t)
-        model_wds.build_water_problem(obj="cost")
-        model_wds.solve()
-        x_pumps = model_wds.x['pumps'].get()
+        temp = sim.run_and_record()
+        temp = utils.convert_arrays_to_lists(temp)
+        results.append(temp)
 
-        # Non-cooperative - solve resilience problem with given WDS operation
-        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t)
-        for line_idx in outage_lines:
-            model.disable_power_line(line_idx)(line_idx)
-        model.build_combined_resilience_problem(x_pumps=x_pumps)
-        model.solve()
-        penalties_for_wds = utils.normalize_mat((model.x['penalty_p'].get())) * model.pds.bus_criticality.values
-
-        ########################################################################################################
-        # solve WDS emergency problem - trying to improve based on PDS information
-        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t)
-        model_wds.build_water_problem(obj="emergency", w=penalties_for_wds)
-        model_wds.solve()
-        x_pumps = model_wds.x['pumps'].get()
-
-        # Partial-cooperative - solve resilience problem with given WDS operation
-        model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, t=self.t)
-        for line_idx in outage_lines:
-            model.disable_power_line(line_idx)
-        model.build_combined_resilience_problem(x_pumps=x_pumps)
-        model.solve()
-        g = graphs.OptGraphs(model)
-        g.plot_penalty()
+        pd.DataFrame(results).to_csv("sim.csv")
 
 
 if __name__ == "__main__":
-    sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", t=24, opt_display=False)
-    pds = PDS(sim.pds_data)
-    one_line_outage = utils.get_subsets(pds.lines.index.to_list(), subsets_size=1)
+    pds_data = "data/pds_emergency_futurized"
+    wds_data = "data/wds_wells"
 
-    sim.run_scenarios(subsets=one_line_outage)
-    plt.show()
+    pds = PDS(pds_data)
+    wds = WDS(wds_data)
+
+    run_n_scenarios(n=500)
+
+
+
+
