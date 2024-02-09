@@ -64,8 +64,32 @@ def normalize_mat(mat):
     return (mat - np.min(mat)) / (np.max(mat) - np.min(mat))
 
 
-def get_subsets(elements, subsets_size):
+def get_subsets_of_size(elements, subsets_size):
     return [list(combination) for combination in itertools.combinations(elements, subsets_size)]
+
+
+def get_subsets_of_max_size(elements, max_subset_size, include_empty=False):
+    """
+    Generate all possible combinations of elements in a list,
+    with each combination's size limited to max_subset_size or less.
+
+    Parameters:
+    elements (list): A list of elements for which the combinations are to be generated.
+    max_subset_size (int): The maximum size of the subset combinations to be included in the output.
+    include_empty (bool): Add an empty set or not
+
+    Returns:
+    list of lists: A list where each sublist is a unique combination of elements from the input list,
+                   with each sublist's size being max_subset_size or smaller, including the empty combination.
+    """
+    if include_empty:
+        all_combinations = [[]]
+    else:
+        all_combinations = []
+    for r in range(1, min(len(elements), max_subset_size) + 1):
+        all_combinations.extend(itertools.combinations(elements, r))
+    return [list(comb) for comb in all_combinations]
+
 
 GRB_STATUS = {
     1: 'LOADED',
