@@ -366,7 +366,7 @@ class Optimizer:
 
     def solve(self):
         # self.model.do_math().to_lp('model_scale')
-        self.model.solve(grb, display=False, params={"TimeLimit": 500, 'OptimalityTol': 10**-8})
+        self.model.solve(grb, display=False, params={"TimeLimit": 500, 'OptimalityTol': 10 ** -8})
         self.objective, self.status = self.model.solution.objval, self.model.solution.status
         if self.status in [gurobipy.gurobipy.GRB.OPTIMAL, gurobipy.gurobipy.GRB.SUBOPTIMAL]:
             wds_cost, pds_cost, generation_cost = self.get_systemwise_costs()
@@ -375,12 +375,12 @@ class Optimizer:
                     f'Objective: {self.objective:.2f} | WDS: {wds_cost:.2f} | Generators {generation_cost:.2f}'
                     f' | Grid {pds_cost:.2f}')
                 print('======================================================================================')
-        elif self.status in [gurobipy.gurobipy.GRB.INFEASIBLE]:
+        elif self.status in [gurobipy.gurobipy.GRB.INFEASIBLE, gurobipy.gurobipy.GRB.INF_OR_UNBD]:
             warnings.warn(f"Solution is INFEASIBLE")
-            self.objective = wds_cost = generation_cost = pds_cost = None
+            self.objective = None
             self.status = gurobipy.gurobipy.GRB.INFEASIBLE
         else:
-            warnings.warn(f"Solution status warning: {self.status} --> , {GRB_STATUS[self.status]}")
+            warnings.warn(f"Solution status warning: {self.status} --> , {utils.GRB_STATUS[self.status]}")
 
     def get_systemwise_costs(self):
         wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
