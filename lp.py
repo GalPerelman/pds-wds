@@ -379,20 +379,3 @@ def solve_combined(pds_dir, wds_dir, x_pumps=None):
     model.build_combined_problem(x_pumps)
     model.solve()
     return model
-
-
-GRB_STATUS = {1: 'LOADED',
-              2: 'OPTIMAL',
-              3: 'INFEASIBLE',
-              4: 'INF_OR_UNBD',
-              5: 'UNBOUNDED',
-              6: 'CUTOFF',
-              7: 'ITERATION_LIMIT',
-              8: 'NODE_LIMIT',
-              9: 'TIME_LIMIT',
-              10: 'SOLUTION_LIMIT',
-              11: 'INTERRUPTED',
-              12: 'NUMERIC',
-              13: 'SUBOPTIMAL',
-              14: 'INPROGRESS',
-              15: 'USER_OBJ_LIMIT'}
