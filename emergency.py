@@ -39,13 +39,13 @@ class Scenario:
         """
         outage_set = utils.get_subsets_of_max_size(elements=self.power_lines, max_subset_size=self.max_outage_lines)
         rand_params = {
-            "t": np.random.randint(low=6, high=24),
-            "wds_demand_factor": np.random.uniform(low=0.75, high=1.25),
+            "t": np.random.randint(low=6, high=25),
+            "wds_demand_factor": np.random.uniform(low=0.8, high=1.2),
             "pds_demand_factor": np.random.uniform(low=0.75, high=1.25),
             "pv_factor": np.random.uniform(low=0.8, high=1.2),
             "outage_lines": outage_set[np.random.randint(low=0, high=len(outage_set))],
-            "tanks_state": np.random.uniform(low=0.1, high=1, size=self.n_tanks),
-            "batteries_state": np.random.uniform(low=0.1, high=1, size=self.n_batteries),
+            "tanks_state": np.random.uniform(low=0.2, high=1, size=self.n_tanks),
+            "batteries_state": np.random.uniform(low=0.2, high=1, size=self.n_batteries),
         }
 
         for param, rand_value in rand_params.items():
