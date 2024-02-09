@@ -4,6 +4,13 @@ import numpy as np
 import pandas as pd
 
 
+def convert_arrays_to_lists(d: dict):
+    for key, value in d.items():
+        if isinstance(value, np.ndarray):
+            d[key] = value.tolist()
+    return d
+
+
 def connectivity_mat(edges_data: pd.DataFrame, from_col: str = 'from', to_col: str = 'to', direction='', param=''):
     n_edges = len(edges_data)
     n_nodes = pd.concat([edges_data[from_col], edges_data[to_col]]).nunique()
