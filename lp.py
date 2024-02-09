@@ -1,5 +1,4 @@
 import os.path
-
 import gurobipy.gurobipy
 import numpy as np
 import pandas as pd
@@ -9,7 +8,6 @@ import rsome
 from rsome import ro
 from rsome import grb_solver as grb
 
-import graphs
 import utils
 from pds import PDS
 
@@ -232,6 +230,32 @@ class Optimizer:
         """
         obj = (self.x['penalty_p'] * self.pds.bus_criticality.iloc[:, :self.t].values * self.pds.pu_to_kw).sum()
         self.model.min(obj)
+
+    def build_inner_pds_problem(self, x_pumps):
+        """
+        An inner problem PDS is solving to estimate the desired penalties for pumping loads
+        The PDS is solved to minimize load shedding with pump as flexible loads subject to:
+        total pumping loads >= planned pumping loads according to WDS delivered schedule
+
+        """
+        self.emergency_objective()
+        self.power_generation_bounds()
+        self.batteries_bounds()
+        self.batteries_balance()
+        self.energy_conservation()
+        self.voltage_bounds()
+        self.power_flow_constraint()
+
+        for line_idx in self.outage_lines:
+            self.disable_power_line(line_idx)
+
+        # Not bounded to the x_pumps delivered from WDS
+        self.bus_balance(x_pumps=None)
+        # But must maintain the same total load at each pump
+        self.model.st((self.wds.pumps_combs @ self.x['pumps']).sum(axis=1)
+                      - (self.wds.pumps_combs @ x_pumps).sum(axis=1)
+                      >= 0
+                      )
 
     def cost_objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)

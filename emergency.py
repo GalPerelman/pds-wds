@@ -1,11 +1,10 @@
-import matplotlib.pyplot as plt
+import gurobipy.gurobipy
 import numpy as np
 import pandas as pd
 
 import lp
 import utils
 from pds import PDS
-import graphs
 from lp import Optimizer, WDS
 
 pd.set_option('display.max_columns', 500)
@@ -52,18 +51,68 @@ class Scenario:
             setattr(self, param, self.kwargs.get(param, rand_params[param]))
 
 
-class PumpsLogicPostpone:
-    def __init__(self):
-        pass
+class CommunicateProtocolMaxInfo:
+    """
+    In this communication protocol, the power utility has access to WDS optimization models
+    The power utility can solve a conjunctive problem and deliver pumps penalties based on it
+    """
 
+    def __init__(self, pds_data, wds_data, scenario):
+        self.pds_data = pds_data
+        self.wds_data = wds_data
+        self.scenario = scenario
 
-class PumpLogicConnectivity:
-    def __init__(self, penalties_mat, pumps_bus_mat):
-        self.penalties_mat = penalties_mat
-        self.pumps_bus_mat = pumps_bus_mat
+    def get_pumps_penalties(self):
+        # run cooperative - assuming max information sharing, power utility can run cooperative model
+        model = opt_resilience(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
+        # get pumps schedule
+        pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
+        pumps_penalties = np.ones(pumps_penalties.shape) - pumps_penalties
+        return pumps_penalties
+    
+    
+class CommunicateProtocolBasic:
+    """
+        In this communication protocol, the power utility has only the standard pumps schedule
+        Standard pumps schedule - was delivered as plan from water utility or estimated based on historic pumping loads
+        The power utility solves an inner optimization problem to evaluate the pumps penalties
+        """
 
-    def logic(self):
-        pass
+    def __init__(self, pds_data, wds_data, scenario):
+        self.pds_data = pds_data
+        self.wds_data = wds_data
+        self.scenario = scenario
+
+    def get_wds_standard(self):
+        """
+        wds standard schedule - based on wds cost minimization
+        """
+        try:
+            model_wds = lp.Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
+            model_wds.build_water_problem(obj="cost", w=1)
+            model_wds.solve()
+            return model_wds.x['pumps'].get()
+        except RuntimeError:
+            return
+
+    def get_pumps_penalties(self):
+        # get the standard wds operation
+        x_pumps = self.get_wds_standard()
+        if x_pumps is None:
+            return
+
+        else:
+            # solve inner pds problem
+            model = lp.Optimizer(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", scenario=self.scenario,
+                                 display=False)
+            model.build_inner_pds_problem(x_pumps=x_pumps)
+            for line_idx in self.scenario.outage_lines:
+                model.disable_power_line(line_idx)
+            model.solve()
+
+            pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
+            pumps_penalties = np.ones(pumps_penalties.shape) - pumps_penalties
+            return pumps_penalties
 
 
 class Simulation:
