@@ -98,6 +98,24 @@ def get_subsets_of_max_size(elements, max_subset_size, include_empty=False):
     return [list(comb) for comb in all_combinations]
 
 
+def adjust_time_window(df, start_time, duration, time_axis=0):
+    if time_axis == 1:
+        df = df.T
+
+    end_time = start_time + duration
+
+    total_rows_needed = start_time + duration
+    extra_rows_needed = max(0, total_rows_needed - len(df))
+    initial_part = df.iloc[start_time:min(len(df), start_time + duration)]
+    repeated_part = pd.concat([df] * ((extra_rows_needed // len(df)) + 2), ignore_index=True).iloc[:extra_rows_needed]
+    adjusted_df = pd.concat([initial_part, repeated_part], ignore_index=True)
+    adjusted_df.index = np.arange(start=start_time, stop=end_time)
+
+    if time_axis == 1:
+        adjusted_df = adjusted_df.T
+
+    return adjusted_df
+
 GRB_STATUS = {
     1: 'LOADED',
     2: 'OPTIMAL',

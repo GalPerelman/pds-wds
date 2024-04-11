@@ -21,6 +21,7 @@ class Scenario:
 
         # default parameters - standard scenario
         self.t = 24
+        self.start_time = 0
         self.wds_demand_factor = 1
         self.pds_demand_factor = 1
         self.pv_factor = 1
@@ -39,6 +40,7 @@ class Scenario:
         outage_set = utils.get_subsets_of_max_size(elements=self.power_lines, max_subset_size=self.max_outage_lines)
         rand_params = {
             "t": np.random.randint(low=6, high=25),
+            "start_time": np.random.randint(low=0, high=24),
             "wds_demand_factor": np.random.uniform(low=0.8, high=1.2),
             "pds_demand_factor": np.random.uniform(low=0.75, high=1.25),
             "pv_factor": np.random.uniform(low=0.8, high=1.2),
@@ -204,6 +206,7 @@ class Simulation:
             "independent": independent_model.objective,
             "communicate": communicate_model.objective,
             "t": self.scenario.t,
+            "start_time": self.scenario.start_time,
             "wds_demand_factor": self.scenario.wds_demand_factor,
             "pds_demand_factor": self.scenario.pds_demand_factor,
             "pv_factor": self.scenario.pv_factor,

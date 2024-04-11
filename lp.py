@@ -66,6 +66,7 @@ class Optimizer:
         self.display = display
 
         self.t = 24
+        self.start_time = 0
         self.outage_lines = []
 
         self.pds = PDS(self.pds_data)
@@ -88,14 +89,15 @@ class Optimizer:
         self.wds.tanks['init_level'] *= self.scenario.tanks_state.T
         self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'init_storage'] *= self.scenario.batteries_state.T
         self.t = self.scenario.t
+        self.start_time = self.scenario.start_time
         self.outage_lines = self.scenario.outage_lines
 
         # adjust all pds and wds data to be within the scenario duration
-        self.pds.dem_active = self.pds.dem_active.iloc[:, :self.t]
-        self.pds.dem_reactive = self.pds.dem_reactive.iloc[:, :self.t]
-        self.pds.tariffs = self.pds.tariffs.iloc[:, :self.t]
-        self.wds.demands = self.wds.demands.iloc[:self.t]
-        self.wds.tariffs = self.wds.tariffs.iloc[:self.t]
+        self.pds.dem_active = utils.adjust_time_window(self.pds.dem_active, self.start_time, self.t, time_axis=1)
+        self.pds.dem_reactive = utils.adjust_time_window(self.pds.dem_reactive, self.start_time, self.t, time_axis=1)
+        self.pds.tariffs = utils.adjust_time_window(self.pds.tariffs, self.start_time, self.t, time_axis=1)
+        self.wds.demands = utils.adjust_time_window(self.wds.demands, self.start_time, self.t, time_axis=0)
+        self.wds.tariffs = utils.adjust_time_window(self.wds.tariffs, self.start_time, self.t, time_axis=0)
 
     def declare_vars(self):
         gen_p = self.model.dvar((self.pds.n_bus, self.t))  # active power generation
