@@ -126,7 +126,12 @@ class Simulation:
         self.opt_display = opt_display
         self.final_tanks_ratio = final_tanks_ratio
         self.comm_protocol = comm_protocol
-        self.scenario_const = scenario_const
+        self.rand_scenario = rand_scenario
+
+        if scenario_const is None:
+            self.scenario_const = {}
+        else:
+            self.scenario_const = scenario_const
 
         # initiate pds and wds objects for data usage in simulation functions
         self.base_pds = PDS(self.pds_data)
@@ -141,12 +146,19 @@ class Simulation:
                      **self.scenario_const
                      )
 
-        s.draw_random()
+        if self.rand_scenario:
+            s.draw_random()
+        else:
+            pass
         return s
 
     def run_individual(self, wds_objective):
-        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
+        # INDIVIDUAL CASE - WDS IS NOT AWARE TO POWER EMERGENCY AND OPTIMIZES FOR 24 HR
+        scenario = copy.deepcopy(self.scenario)
+        scenario.t = 24
+        model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=scenario,
                               display=self.opt_display)
+
         model_wds.build_water_problem(obj=wds_objective)
         model_wds.solve()
         if model_wds.status == gurobipy.gurobipy.GRB.INFEASIBLE or model_wds.status == gurobipy.gurobipy.GRB.INF_OR_UNBD:
@@ -228,17 +240,38 @@ def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
     return model
 
 
-def run_n_scenarios(n):
+def analyze_single_scenario(results_df: pd.DataFrame, idx: int):
+    scenario = results_df.iloc[idx]
+
+    scenario_params = {
+        "t": scenario["t"],
+        "start_time": scenario["start_time"],
+        "wds_demand_factor": scenario["wds_demand_factor"],
+        "pds_demand_factor": scenario["pds_demand_factor"],
+        "pv_factor": scenario["pv_factor"],
+        "outage_lines": scenario["outage_lines"],
+        "tanks_state": np.array(scenario["tanks_state"]),
+        "batteries_state": np.array(scenario["batteries_state"])
+    }
+
+    sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False, final_tanks_ratio=0.2,
+                     comm_protocol=CommunicateProtocolBasic, rand_scenario=False, scenario_const=scenario_params)
+    res = sim.run_and_record()
+    sim.plot_wds()
+
+
+def run_random_scenarios(n, final_tanks_ratio, export_path=''):
     results = []
     for _ in range(n):
         sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", opt_display=False,
-                         comm_protocol=CommunicateProtocolBasic)
+                         final_tanks_ratio=final_tanks_ratio, comm_protocol=CommunicateProtocolBasic,
+                         rand_scenario=True)
 
         temp = sim.run_and_record()
         temp = utils.convert_arrays_to_lists(temp)
         results.append(temp)
-
-        pd.DataFrame(results).to_csv("sim.csv")
+        if export_path:
+            pd.DataFrame(results).to_csv(export_path)
 
 
 if __name__ == "__main__":
