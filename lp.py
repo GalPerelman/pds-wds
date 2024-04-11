@@ -150,10 +150,10 @@ class Optimizer:
 
         return const_term + generation_cost
 
-    def build_water_problem(self, obj, w=None):
+    def build_water_problem(self, obj, final_tanks_ratio=1, w=None):
         if obj == "cost":
             wds_cost = self.get_wds_cost()
-            self.cost_objective_func(wds_cost, 0)
+            self.cost_objective_func(wds_cost + self.x['penalty_final_vol'].sum() * 10 ** 6, 0)
         elif obj == "emergency":
             if w is None:
                 w = np.ones((self.wds.n_pumps, self.t))
@@ -180,9 +180,9 @@ class Optimizer:
             self.model.min(pumps_penalized_power.sum())
 
         self.one_comb_only()
-        self.mass_balance()
+        self.mass_balance(final_tanks_ratio=final_tanks_ratio)
 
-    def build_combined_problem(self, x_pumps=None):
+    def build_combined_problem(self, x_pumps=None, final_tanks_ratio=1):
         wds_cost = 0
         pds_cost = self.get_pds_cost()
         self.cost_objective_func(wds_cost, pds_cost)
@@ -202,9 +202,9 @@ class Optimizer:
             self.model.st(self.x['pumps'] - x_pumps == 0)
 
         self.one_comb_only()
-        self.mass_balance()
+        self.mass_balance(final_tanks_ratio=final_tanks_ratio)
 
-    def build_combined_resilience_problem(self, x_pumps=None):
+    def build_combined_resilience_problem(self, x_pumps=None, final_tanks_ratio=0):
         self.emergency_objective()
         self.power_generation_bounds()
         self.batteries_bounds()
@@ -221,7 +221,7 @@ class Optimizer:
             self.model.st(self.x['pumps'] - x_pumps == 0)
 
         self.one_comb_only()
-        self.mass_balance()
+        self.mass_balance(final_tanks_ratio=final_tanks_ratio)
 
     def emergency_objective(self):
         """
@@ -366,7 +366,7 @@ class Optimizer:
         mat = mat * param_array
         return mat
 
-    def mass_balance(self):
+    def mass_balance(self, final_tanks_ratio):
         lhs = np.zeros((self.wds.n_tanks * self.t, (self.x['pumps'].shape[0] + self.x['vol'].shape[0]) * self.t))
         rhs = np.zeros((self.wds.n_tanks * self.t, 1))
 
@@ -384,7 +384,10 @@ class Optimizer:
 
             self.model.st(self.x['vol'][i, :] <= self.wds.tanks.loc[tank_id, 'max_vol'])
             self.model.st(self.x['vol'][i, :] >= self.wds.tanks.loc[tank_id, 'min_vol'])
-            self.model.st(self.x['vol'][i, -1] - self.wds.tanks.loc[tank_id, 'init_vol'] >= 0)
+            self.model.st(self.x['vol'][i, -1]
+                          - self.wds.tanks.loc[tank_id, 'init_vol'] * final_tanks_ratio
+                          + self.x['penalty_final_vol'][i, :]
+                          >= 0)
 
         self.model.st(lhs[:, : - self.wds.n_tanks * self.t] @ self.x['pumps'].T.flatten()
                       + lhs[:, self.wds.n_combs * self.t:] @ self.x['vol'].flatten()

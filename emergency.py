@@ -91,7 +91,7 @@ class CommunicateProtocolBasic:
         """
         try:
             model_wds = lp.Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
-            model_wds.build_water_problem(obj="cost", w=1)
+            model_wds.build_water_problem(obj="cost", final_tanks_ratio=1, w=1)
             model_wds.solve()
             return model_wds.x['pumps'].get()
         except RuntimeError:
@@ -118,10 +118,13 @@ class CommunicateProtocolBasic:
 
 
 class Simulation:
-    def __init__(self, pds_data, wds_data, opt_display, comm_protocol, scenario_const: dict):
+    def __init__(self, pds_data, wds_data, opt_display, final_tanks_ratio, comm_protocol, rand_scenario,
+                 scenario_const=None):
+
         self.pds_data = pds_data
         self.wds_data = wds_data
         self.opt_display = opt_display
+        self.final_tanks_ratio = final_tanks_ratio
         self.comm_protocol = comm_protocol
         self.scenario_const = scenario_const
 
@@ -185,7 +188,7 @@ class Simulation:
 
         else:
             model_wds = Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
-            model_wds.build_water_problem(obj="emergency", w=w)
+            model_wds.build_water_problem(obj="emergency", final_tanks_ratio=self.final_tanks_ratio, w=w)
             model_wds.solve()
             x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
             model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, x_pumps=x_pumps)
