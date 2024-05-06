@@ -21,10 +21,10 @@ class WDS:
     def __init__(self, data_folder):
         self.data_folder = data_folder
 
-        self.combs = pd.read_csv(os.path.join(self.data_folder, 'combs.csv'), index_col=0)
-        self.tanks = pd.read_csv(os.path.join(self.data_folder, 'tanks.csv'), index_col=0)
-        self.demands = pd.read_csv(os.path.join(self.data_folder, 'demands.csv'), index_col=0)
-        self.tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
+        self._combs = pd.read_csv(os.path.join(self.data_folder, 'combs.csv'), index_col=0)
+        self._tanks = pd.read_csv(os.path.join(self.data_folder, 'tanks.csv'), index_col=0)
+        self._demands = pd.read_csv(os.path.join(self.data_folder, 'demands.csv'), index_col=0)
+        self._tariffs = pd.read_csv(os.path.join(self.data_folder, 'tariffs.csv'), index_col=0)
 
         self.n_combs = len(self.combs)
         self.n_tanks = len(self.tanks)
@@ -35,6 +35,46 @@ class WDS:
         self.tanks['init_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['init_level'])
         self.tanks['min_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['min_level'])
         self.tanks['max_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['max_level'])
+
+    @property
+    def combs(self):
+        return self._combs
+
+    @combs.setter
+    def combs(self, updated_combs):
+        self._combs = updated_combs
+        self.n_combs = len(self._combs)
+        self.n_stations = self._combs['station'].nunique()
+        self.n_pumps = len([_ for _ in self._combs.columns if _.startswith('pump_')])
+        self.pumps_combs = self.get_pumps_combs_mat()
+
+    @property
+    def tanks(self):
+        return self._tanks
+
+    @tanks.setter
+    def tanks(self, updated_tanks):
+        self._tanks = updated_tanks
+        self.n_tanks = len(self.tanks)
+        self.tanks['init_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['init_level'])
+        self.tanks['min_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['min_level'])
+        self.tanks['max_vol'] = self.level_to_vol(self.tanks['diameter'], self.tanks['max_level'])
+
+    @property
+    def demands(self):
+        return self._demands
+
+    @demands.setter
+    def demands(self, updated_demands):
+        self._demands = updated_demands
+
+    @property
+    def tariffs(self):
+        return self._tariffs
+
+    @tariffs.setter
+    def tariffs(self, updated_tariffs):
+        self._tariffs = updated_tariffs
 
     def get_tank_demand(self, tank_id):
         return self.demands.loc[:, tank_id]
