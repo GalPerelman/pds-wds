@@ -138,6 +138,10 @@ class Simulation:
         self.base_wds = WDS(self.wds_data)
         self.scenario = self.draw_scenario()
 
+        self.joint_model = None
+        self.indep_model = None
+        self.comm_model = None
+
     def draw_scenario(self):
         s = Scenario(n_tanks=self.base_wds.n_tanks,
                      n_batteries=self.base_pds.n_batteries,
@@ -208,26 +212,51 @@ class Simulation:
         return model
 
     def run_and_record(self):
-        joint_model = self.run_cooperated()
+        self.joint_model = self.run_cooperated()
+        self.indep_model = self.run_individual(wds_objective="cost")
+        self.comm_model = self.run_communicate(self.comm_protocol)
 
-        # run realistic situation where systems not communicate at all
-        independent_model = self.run_individual(wds_objective="cost")
-
-        # wds based on information from pds
-        communicate_model = self.run_communicate(self.comm_protocol)
+        try:
+            indep_wds_cost = self.indep_model.get_systemwise_costs(self.scenario.t)[0]
+            comm_wds_cost = self.comm_model.get_systemwise_costs(self.scenario.t)[0]
+            indep_wds_penalties = list(self.indep_model.x['penalty_final_vol'].get().T[0])
+            comm_wds_penalties = list(self.comm_model.x['penalty_final_vol'].get().T[0])
+            indep_wds_pumped_vol = (self.indep_model.wds.get_pumped_vol(self.indep_model.x['pumps'].get())).sum()
+            comm_wds_pumped_vol = (self.comm_model.wds.get_pumped_vol(self.comm_model.x['pumps'].get())).sum()
+            indep_final_vol = self.indep_model.x['vol'].get()[:, self.scenario.t-1]
+            comm_final_vol = self.comm_model.x['vol'].get()[:, -1]
+        except RuntimeError:
+            indep_wds_cost = None
+            comm_wds_cost = None
+            indep_wds_penalties = None
+            comm_wds_penalties = None
+            indep_wds_pumped_vol = None
+            comm_wds_pumped_vol = None
+            indep_final_vol = None
+            comm_final_vol = None
 
         return {
-            "cooperative": joint_model.objective,
-            "independent": independent_model.objective,
-            "communicate": communicate_model.objective,
+            "cooperative": self.joint_model.objective,
+            "independent": self.indep_model.objective,
+            "communicative": self.comm_model.objective,
+            "independent_wds_penalties": indep_wds_penalties,
+            "communicate_wds_penalties": comm_wds_penalties,
+            "independent_wds_cost": indep_wds_cost,
+            "communicate_wds_cost": comm_wds_cost,
+            "independent_wds_vol": indep_wds_pumped_vol,
+            "communicate_wds_vol": comm_wds_pumped_vol,
+            "independent_final_vol": indep_final_vol,
+            "communicate_final_vol": comm_final_vol,
             "t": self.scenario.t,
             "start_time": self.scenario.start_time,
             "wds_demand_factor": self.scenario.wds_demand_factor,
             "pds_demand_factor": self.scenario.pds_demand_factor,
             "pv_factor": self.scenario.pv_factor,
             "outage_lines": self.scenario.outage_lines,
-            "tanks_states": self.scenario.tanks_state,
-            "batteries_state": self.scenario.batteries_state
+            "n_outage_lines": len(self.scenario.outage_lines),
+            "tanks_state": self.scenario.tanks_state,
+            "batteries_state": self.scenario.batteries_state,
+            "final_tanks_ratio": self.final_tanks_ratio
         }
 
 
