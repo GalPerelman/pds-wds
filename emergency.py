@@ -180,7 +180,9 @@ class Simulation:
             model.status = gurobipy.GRB.INFEASIBLE
 
         else:
-            x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
+            # planned schedule (can be seen also as historic nominal schedule)
+            # solves for 24 hours but take only the scenario duration first steps for comparison purposes
+            x_pumps = model_wds.x['pumps'].get()[:, :self.scenario.t]
 
             # Non-cooperative - solve resilience problem with given WDS operation
             model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
