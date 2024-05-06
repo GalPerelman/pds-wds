@@ -49,9 +49,9 @@ class Scenario:
             "t": np.random.randint(low=6, high=25),
             "start_time": np.random.randint(low=0, high=24),
             "wds_demand_factor": np.random.uniform(low=0.8, high=1.2),
-            "pds_demand_factor": np.random.uniform(low=0.75, high=1.25),
+            "pds_demand_factor": np.random.uniform(low=0.9, high=1.2),
             "pv_factor": np.random.uniform(low=0.8, high=1.2),
-            "outage_lines": outage_set[np.random.randint(low=0, high=len(outage_set))],
+            "outage_lines": outage_set[np.random.randint(low=0, high=max(1, len(outage_set)))],
             "tanks_state": np.random.uniform(low=0.2, high=1, size=self.n_tanks),
             "batteries_state": np.random.uniform(low=0.2, high=1, size=self.n_batteries),
         }
@@ -112,8 +112,7 @@ class CommunicateProtocolBasic:
 
         else:
             # solve inner pds problem
-            model = lp.Optimizer(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", scenario=self.scenario,
-                                 display=False)
+            model = lp.Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
             model.build_inner_pds_problem(x_pumps=x_pumps)
             for line_idx in self.scenario.outage_lines:
                 model.disable_power_line(line_idx)
@@ -334,14 +333,33 @@ def run_random_scenarios(n, final_tanks_ratio, export_path=''):
 
 
 if __name__ == "__main__":
+    global_seed = 42
+    os.environ['PYTHONHASHSEED'] = str(global_seed)
+    random.seed(global_seed)
+    np.random.seed(global_seed)
+    np.set_printoptions(suppress=True, precision=4)
+
     pds_data = "data/pds_emergency_futurized"
     wds_data = "data/wds_wells"
 
     pds = PDS(pds_data)
     wds = WDS(wds_data)
 
-    run_n_scenarios(n=500)
+    # Main procedure - run 1000 extreme scenarios and compare the three strategies
+    export_file = f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_results.csv'
+    run_random_scenarios(n=1000, final_tanks_ratio=0.2, export_path=export_file)
 
+    # Analyze specific scenarios to demonstrate WDS behaviour
+    # import results_analysis
+    # data = results_analysis.load_results("results_mip_soft-tanks_rand-start-detailed.csv", drop_nans=False)
+    # data = results_analysis.load_results("20240502-165213_results.csv", drop_nans=False)
+    # analyze_single_scenario(data, 673)
+    # analyze_single_scenario(data, 995)
 
+    # example for changing pump according to failure location
+    # line 31 is outage - well 1 generator cannot contribute to PDS
+    # all pumping is shifted to well 1 to utilize the generator as much as possible
+    # and reduce stress from the other two generators
+    # analyze_single_scenario(data, 722)
 
-
+    plt.show()
