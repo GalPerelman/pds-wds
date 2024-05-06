@@ -268,6 +268,27 @@ class Simulation:
             "final_tanks_ratio": self.final_tanks_ratio
         }
 
+    def plot_wds(self):
+        pumps_names = [col for col in self.base_wds.combs.columns if col.startswith("pump_")]
+        fig_gantt, axes = plt.subplots(nrows=2, sharex=True)
+
+        g = graphs.OptGraphs(self.indep_model)
+        ax_independent = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[0])
+        ax_independent.set_title("Independent")
+        fig = g.plot_all_tanks(leg_label="Independent")
+        fig_bat = g.plot_batteries(leg_label="Independent")
+        fig_gen = g.plot_all_generators(leg_label="Independent")
+
+        g = graphs.OptGraphs(self.comm_model)
+        ax_communicate = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
+        ax_communicate.set_title("Communicative")
+        fig = g.plot_all_tanks(fig=fig, leg_label="Communicative")
+        fig_bat = g.plot_batteries(leg_label="Communicative", fig=fig_bat)
+        fig_gen = g.plot_all_generators(leg_label="Communicative", fig=fig_gen)
+
+        fig_gantt.subplots_adjust(left=0.13, bottom=0.15, right=0.92, top=0.9, hspace=0.35)
+        fig_gantt.text(0.5, 0.04, 'Time (hr)', ha='center')
+
 
 def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
     model = Optimizer(pds_data=pds_data, wds_data=wds_data, scenario=scenario, display=display)
