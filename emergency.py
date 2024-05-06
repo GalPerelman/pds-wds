@@ -1,7 +1,14 @@
-import gurobipy.gurobipy
+import copy
+import datetime
+import os
+import random
+
+from gurobipy import gurobipy
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
+import graphs
 import lp
 import utils
 from pds import PDS
@@ -165,12 +172,12 @@ class Simulation:
 
         model_wds.build_water_problem(obj=wds_objective)
         model_wds.solve()
-        if model_wds.status == gurobipy.gurobipy.GRB.INFEASIBLE or model_wds.status == gurobipy.gurobipy.GRB.INF_OR_UNBD:
+        if model_wds.status == gurobipy.GRB.INFEASIBLE or model_wds.status == gurobipy.GRB.INF_OR_UNBD:
             model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                               display=self.opt_display)
 
             model.objective = None
-            model.status = gurobipy.gurobipy.GRB.INFEASIBLE
+            model.status = gurobipy.GRB.INFEASIBLE
 
         else:
             x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
@@ -200,7 +207,7 @@ class Simulation:
         if w is None:
             model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display)
             model.objective = None
-            model.status = gurobipy.gurobipy.GRB.INFEASIBLE
+            model.status = gurobipy.GRB.INFEASIBLE
 
         else:
             model_wds = Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
