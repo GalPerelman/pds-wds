@@ -73,7 +73,7 @@ class Optimizer:
         self.model.st(penalty_p >= 0)
         self.model.st(penalty_q >= 0)
 
-        x_pumps = self.model.dvar((self.wds.n_combs, self.t))
+        x_pumps = self.model.dvar((self.wds.n_combs, self.t), vtype='B')
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
         penalty_final_vol = self.model.dvar((self.wds.n_tanks, 1))
 
