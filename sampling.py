@@ -154,8 +154,8 @@ if __name__ == "__main__":
     mean, cov, corr = analyze_time_series(loads, loads.columns[0])
 
     # water nominal
-    from lp import WaterNet
-    wds = WaterNet("data/wds_wells")
+    from wds import WDS
+    wds = WDS("data/wds_wells")
 
     # example for drawing random sample
     nominal = wds.demands.values

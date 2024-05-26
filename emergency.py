@@ -79,8 +79,8 @@ class CommunicateProtocolMaxInfo:
         pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
         pumps_penalties = np.ones(pumps_penalties.shape) - pumps_penalties
         return pumps_penalties
-    
-    
+
+
 class CommunicateProtocolBasic:
     """
         In this communication protocol, the power utility has only the standard pumps schedule
