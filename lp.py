@@ -344,7 +344,8 @@ class Optimizer:
             self.model.st(self.x['vol'][i, :] <= self.wds.tanks.loc[tank_id, 'max_vol'])
             self.model.st(self.x['vol'][i, :] >= self.wds.tanks.loc[tank_id, 'min_vol'])
             self.model.st(self.x['vol'][i, -1]
-                          - self.wds.tanks.loc[tank_id, 'init_vol'] * final_tanks_ratio
+                          # - self.wds.tanks.loc[tank_id, 'init_vol'] * final_tanks_ratio
+                          - min(2 * np.mean(dem), self.wds.tanks.loc[tank_id, 'init_vol'])
                           + self.x['penalty_final_vol'][i, :]
                           >= 0)
 
