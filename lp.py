@@ -365,14 +365,22 @@ class Optimizer:
         else:
             warnings.warn(f"Solution status warning: {self.status} --> , {utils.GRB_STATUS[self.status]}")
 
-    def get_systemwise_costs(self):
-        wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()
-        wds_cost = (self.wds.tariffs.values.T * wds_power).sum()
-        grid_cost = np.sum(self.pds.gen_mat @ (self.pds.pu_to_kw * self.x['gen_p'].get()) * self.pds.tariffs.values)
+    def get_systemwise_costs(self, t=None):
+        # t is a parameter that enable to calculate cost for the first t hours only
+        # it was added to get comparable cost for the independence and coomunicate optimization
+        # where independent WDS horizon is 24 hours and communicate is only for the emergency duration
+        if t is None:
+            t = self.t
+
+        wds_power = self.wds.combs.loc[:, "total_power"].values.reshape(1, -1) @ self.x['pumps'].get()[:, :t]
+        wds_cost = (self.wds.tariffs.values[:t].T * wds_power).sum()
+
+        grid_purchased_power = (self.pds.pu_to_kw * self.x['gen_p'].get()[:, :t])
+        grid_cost = np.sum(self.pds.gen_mat @ grid_purchased_power * self.pds.tariffs.values[:, :t])
 
         # NOTE THAT C IS MULTIPLIED BY T - NUMBER OF TIME STEPS
         # ASSUMING GENERATORS ARE NOT TURNED OFF - THUS FIXED COST IS FOR EVERY TIME STEP
-        generated_kw = self.x['gen_p'].get() * self.pds.pu_to_kw
+        generated_kw = self.x['gen_p'].get()[:, :t] * self.pds.pu_to_kw
         generation_cost = (np.sum((((self.pds.bus['a'].values.reshape(-1, 1) ** 0.5) * generated_kw).flatten()) ** 2)
                            + (self.pds.bus['b'].values.reshape(-1, 1) * generated_kw).sum()
                            + (self.pds.bus['c'].values.reshape(-1, 1) * self.t).sum()
