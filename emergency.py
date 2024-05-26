@@ -12,7 +12,8 @@ import graphs
 import lp
 import utils
 from pds import PDS
-from lp import Optimizer, WDS
+from lp import Optimizer
+from wds import WDS
 
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)

@@ -6,7 +6,7 @@ from rsome import grb_solver as grb
 import graphs
 import utils
 from pds import PDS
-from wds import WDS
+from wds import WDSPWL
 
 
 class Opt:
@@ -26,7 +26,7 @@ class Opt:
 
     def init_distribution_systems(self):
         pds = PDS(self.pds_data)
-        wds = WDS(self.wds_data, self.n)
+        wds = WDSPWL(self.wds_data, self.n)
         return pds, wds
 
     def declare_vars(self):
