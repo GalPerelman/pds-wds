@@ -41,8 +41,14 @@ class Optimizer:
                                    reactive_factor=self.scenario.pds_demand_factor)
         self.wds.factorize_demands(self.scenario.wds_demand_factor)
         self.pds.bus.loc[self.pds.bus['type'] == 'pv', 'max_gen_kw'] *= self.scenario.pv_factor
-        self.wds.tanks['init_level'] *= self.scenario.tanks_state.T
-        self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'init_storage'] *= self.scenario.batteries_state.T
+
+        tanks = self.wds.tanks.copy(deep=True)
+        tanks['init_level'] = self.wds.tanks['max_level'] * self.scenario.tanks_state.T
+        self.wds.tanks = tanks
+
+        init_batteries_state = self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'max_storage'] * self.scenario.batteries_state.T
+        self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'init_storage'] = init_batteries_state
+
         self.t = self.scenario.t
         self.start_time = self.scenario.start_time
         self.outage_lines = self.scenario.outage_lines
