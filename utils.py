@@ -1,5 +1,4 @@
 import itertools
-
 import numpy as np
 import pandas as pd
 
@@ -89,7 +88,7 @@ def get_subsets_of_max_size(elements, max_subset_size, include_empty=False):
     list of lists: A list where each sublist is a unique combination of elements from the input list,
                    with each sublist's size being max_subset_size or smaller, including the empty combination.
     """
-    if include_empty:
+    if include_empty or max_subset_size == 0:
         all_combinations = [[]]
     else:
         all_combinations = []
@@ -115,6 +114,7 @@ def adjust_time_window(df, start_time, duration, time_axis=0):
         adjusted_df = adjusted_df.T
 
     return adjusted_df
+
 
 GRB_STATUS = {
     1: 'LOADED',
