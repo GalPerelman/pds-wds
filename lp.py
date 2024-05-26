@@ -55,6 +55,8 @@ class Optimizer:
         self.pds.dem_active = utils.adjust_time_window(self.pds.dem_active, self.start_time, self.t, time_axis=1)
         self.pds.dem_reactive = utils.adjust_time_window(self.pds.dem_reactive, self.start_time, self.t, time_axis=1)
         self.pds.tariffs = utils.adjust_time_window(self.pds.tariffs, self.start_time, self.t, time_axis=1)
+        self.pds.max_gen_profile = utils.adjust_time_window(self.pds.max_gen_profile, self.start_time, self.t, time_axis=1)
+        self.pds.bus_criticality = utils.adjust_time_window(self.pds.bus_criticality, self.start_time, self.t, time_axis=1)
         self.wds.demands = utils.adjust_time_window(self.wds.demands, self.start_time, self.t, time_axis=0)
         self.wds.tariffs = utils.adjust_time_window(self.wds.tariffs, self.start_time, self.t, time_axis=0)
 
