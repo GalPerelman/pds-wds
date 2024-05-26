@@ -266,6 +266,7 @@ class Optimizer:
         self.model.st(self.pds.gen_mat @ self.x['gen_q'] + a @ self.x['q']
                       - x @ self.x['I']
                       - self.pds.dem_reactive.values
+                      - pumps_power * self.wds.real_to_reactive
                       + self.pds.bus.loc[:, 'B'].values @ self.x['v']
                       + self.x['penalty_q']
                       == 0)

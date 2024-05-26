@@ -1,0 +1,4 @@
+name: "wds-wells"
+pumps_pf: 0.8
+real_to_reactive: 0.75
+input_power_units: "kw"
