@@ -210,11 +210,8 @@ class Optimizer:
 
         # Not bounded to the x_pumps delivered from WDS
         self.bus_balance(x_pumps=None)
-        # But must maintain the same total load at each pump
-        self.model.st((self.wds.pumps_combs @ self.x['pumps']).sum(axis=1)
-                      - (self.wds.pumps_combs @ x_pumps).sum(axis=1)
-                      >= 0
-                      )
+        # But must maintain the same total load; For preserving load in each individual pump: sum(axis=1)
+        self.model.st((self.wds.pumps_combs @ self.x['pumps']).sum() - (self.wds.pumps_combs @ x_pumps).sum() >= 0)
 
     def cost_objective_func(self, wds_obj, pds_obj):
         self.model.min(wds_obj + pds_obj)
