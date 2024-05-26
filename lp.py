@@ -75,14 +75,16 @@ class Optimizer:
 
         x_pumps = self.model.dvar((self.wds.n_combs, self.t))
         vol = self.model.dvar((self.wds.n_tanks, self.t))  # tanks volume
+        penalty_final_vol = self.model.dvar((self.wds.n_tanks, 1))
 
         self.model.st(0 <= x_pumps)
         self.model.st(x_pumps <= 1)
         self.model.st(vol >= 0)
+        self.model.st(penalty_final_vol >= 0)
 
         return {'gen_p': gen_p, 'gen_q': gen_q, 'bat_p': bat_p, 'bat_e': bat_e, 'v': v, 'I': I, 'p': p, 'q': q,
                 'penalty_p': penalty_p, 'penalty_q': penalty_q,
-                'pumps': x_pumps, 'vol': vol
+                'pumps': x_pumps, 'vol': vol, 'penalty_final_vol': penalty_final_vol
                 }
 
     def get_wds_cost(self):
