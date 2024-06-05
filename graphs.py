@@ -97,7 +97,8 @@ class OptGraphs:
         axes = np.atleast_2d(axes).ravel()
         for i, (pump_id, row) in enumerate(self.wds.pumps.iterrows()):
             values = (self.x['alpha'].get() * self.opt.pl_flow_mat).sum(axis=-1)[pump_id, :]
-            axes[i] = time_series(x=range(len(values)), y=values, title=f'Pump {pump_id}', ax=axes[i])
+            axes[i] = time_series(x=range(self.opt.start_time, self.opt.start_time + len(values)),
+                                  y=values, title=f'Pump {pump_id}', ax=axes[i])
 
         plt.tight_layout()
         return fig
