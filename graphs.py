@@ -96,43 +96,51 @@ class OptGraphs:
         plt.tight_layout()
         return fig
 
-    def pumps_gantt(self, pumps_names: list):
+    def pumps_gantt(self, pumps_names: list, title: str, ax=None):
         df = pd.DataFrame(self.x['pumps'].get()).T
-
         pe = [PathEffects.Stroke(linewidth=6, foreground='black'),
               PathEffects.Stroke(foreground='black'),
               PathEffects.Normal()]
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            fig, ax = plt.subplots()
+
         for i, unit in enumerate(pumps_names):
             unit_combs = self.wds.combs.loc[self.wds.combs[unit] == 1].index.to_list()
-            temp = pd.DataFrame((df[unit_combs] > 0).any(axis=1).astype(int), columns=[unit], index=df.index)
+            temp = pd.DataFrame(df[unit_combs].sum(axis=1), columns=[unit], index=range(len(df)))
+            temp.index = range(self.opt.start_time, self.opt.start_time + len(df))
             temp.loc[:, 'start'] = temp.index
             temp.loc[:, 'end'] = temp['start'] + pd.Series(temp[unit])
             ax.hlines([i], temp.index.min(), temp.index.max() + 1, linewidth=5, color='w', path_effects=pe)
             ax.hlines(np.repeat(i, len(temp)), temp['end'], temp['start'], linewidth=5, colors='black')
 
         ax.xaxis.grid(True)
+        ax.set_xticks([_ for _ in range(self.opt.start_time, self.opt.start_time + len(df))],
+                    [_ % 24 for _ in range(self.opt.start_time, self.opt.start_time + len(df))])
         ax.set_yticks([i for i in range(len(pumps_names))])
-        ax.set_yticklabels(pumps_names)
-        return fig
+        ax.set_yticklabels([_[5:] for _ in pumps_names])
+        ax.set_title(title)
+        return ax
 
     def plot_all_generators(self, fig=None, leg_label=''):
-        gen_idx = self.pds.bus.loc[self.pds.bus['type'] == 'gen'].index
+        gen_idx = self.pds.generators.index
         x = self.x['gen_p'].get()[gen_idx, :] * self.pds.pu_to_kw
-        x = x[~np.all(np.isclose(x, 0, atol=0.0001), axis=1)]
 
         ncols = max(1, int(math.ceil(math.sqrt(x.shape[0]))))
         nrows = max(1, int(math.ceil(x.shape[0] / ncols)))
         if fig is None:
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True, figsize=(8, 4))
             axes = np.atleast_2d(axes).ravel()
         else:
             axes = fig.axes
 
         for i in range(x.shape[0]):
-            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)', leg_label=leg_label)
+            gen_name = f"{gen_idx[i]}-{self.pds.generators.loc[gen_idx[i], 'name']}"
+            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)',
+                                  leg_label=f"{leg_label}")
             axes[i].legend()
+            axes[i].ticklabel_format(useOffset=False, style='plain')
+            axes[i].set_title(f"{gen_idx[i]}")
 
         return fig
 
@@ -140,6 +148,7 @@ class OptGraphs:
         bat_idx = self.pds.batteries.index.tolist()
         x = self.x['bat_e'].get()[bat_idx, :] * self.pds.pu_to_kw
         x = x[~np.all(np.isclose(x, 0, atol=0.0001), axis=1)]
+        y = self.x['bat_p'].get()[bat_idx, :] * self.pds.pu_to_kw
 
         ncols = max(1, int(math.ceil(math.sqrt(x.shape[0]))))
         nrows = max(1, int(math.ceil(x.shape[0] / ncols)))
@@ -151,8 +160,10 @@ class OptGraphs:
             axes = fig.axes
 
         for i in range(x.shape[0]):
+            axes[i].bar(range(y.shape[1]), y[i, :])
             axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Energy (kWh)', leg_label=leg_label)
             axes[i].legend()
+            axes[i].set_title(f"{bat_idx[i]}")
 
         return fig
 
@@ -173,8 +184,9 @@ def plot_demands(pds, wds):
     fig, axes = plt.subplots(nrows=2, sharex=True)
 
     axes[0].plot(pds.dem_active.sum(axis=0).T * pds.pu_to_kw, marker='o', markersize=4, mfc='w')
+    axes[0].set_ylabel('Power (kW)')
+    axes[0].plot(pds.dem_reactive.sum(axis=0).T * pds.pu_to_kw, c='grey', marker='o', markersize=4, mfc='w')
     axes[0].grid()
-    axes[0].set_ylabel('Active power (kW)')
 
     axes[1].plot(wds.demands.sum(axis=1).index, wds.demands.sum(axis=1), marker='o', markersize=4, mfc='w')
     axes[1].grid()
