@@ -1,8 +1,0 @@
-﻿node,elevation,min_pressure,max_pressure,type
-0,0,0,500,reservoir
-1,0,20,500,junction
-2,20,20,500,junction
-3,40,20,500,junction
-4,80,20,500,tank
-5,30,20,500,junction
-6,40,20,500,junction
