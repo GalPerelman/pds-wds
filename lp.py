@@ -355,9 +355,8 @@ class Optimizer:
                       + lhs[:, self.wds.n_combs * self.t:] @ self.x['vol'].flatten()
                       == np.squeeze(rhs))
 
-    def solve(self):
-        # self.model.do_math().to_lp('model_scale')
-        self.model.solve(grb, display=False, params={"TimeLimit": 500, 'OptimalityTol': 10 ** -8})
+    def solve(self, mip_gap=0.01):
+        self.model.solve(grb, display=False, params={"TimeLimit": 500, 'MIPgap': mip_gap})
         self.objective, self.status = self.model.solution.objval, self.model.solution.status
         if self.status in [gurobipy.gurobipy.GRB.OPTIMAL, gurobipy.gurobipy.GRB.SUBOPTIMAL]:
             wds_cost, pds_cost, generation_cost = self.get_systemwise_costs()

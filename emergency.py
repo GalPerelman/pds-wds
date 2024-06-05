@@ -163,7 +163,7 @@ class Simulation:
             pass
         return s
 
-    def run_individual(self, wds_objective):
+    def run_individual(self, wds_objective, mip_gap):
         # INDIVIDUAL CASE - WDS IS NOT AWARE TO POWER EMERGENCY AND OPTIMIZES FOR 24 HR
         scenario = copy.deepcopy(self.scenario)
         scenario.t = 24
@@ -171,7 +171,7 @@ class Simulation:
                               display=self.opt_display)
 
         model_wds.build_water_problem(obj=wds_objective)
-        model_wds.solve()
+        model_wds.solve(mip_gap)
         if model_wds.status == gurobipy.GRB.INFEASIBLE or model_wds.status == gurobipy.GRB.INF_OR_UNBD:
             model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                               display=self.opt_display)
@@ -190,20 +190,20 @@ class Simulation:
             for line_idx in self.scenario.outage_lines:
                 model.disable_power_line(line_idx)
             model.build_combined_resilience_problem(x_pumps=x_pumps)
-            model.solve()
+            model.solve(mip_gap)
 
         return model
 
-    def run_cooperated(self):
+    def run_cooperated(self, mip_gap):
         model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                           display=self.opt_display)
         for line_idx in self.scenario.outage_lines:
             model.disable_power_line(line_idx)
         model.build_combined_resilience_problem()
-        model.solve()
+        model.solve(mip_gap)
         return model
 
-    def run_communicate(self, comm_protocol):
+    def run_communicate(self, comm_protocol, mip_gap):
         p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
         w = p.get_pumps_penalties()
         if w is None:
@@ -214,16 +214,16 @@ class Simulation:
         else:
             model_wds = Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
             model_wds.build_water_problem(obj="emergency", final_tanks_ratio=self.final_tanks_ratio, w=w)
-            model_wds.solve()
+            model_wds.solve(mip_gap)
             x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
             model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, x_pumps=x_pumps)
 
         return model
 
-    def run_and_record(self):
-        self.joint_model = self.run_cooperated()
-        self.indep_model = self.run_individual(wds_objective="cost")
-        self.comm_model = self.run_communicate(self.comm_protocol)
+    def run_and_record(self, mip_gap):
+        self.joint_model = self.run_cooperated(mip_gap=mip_gap)
+        self.indep_model = self.run_individual(wds_objective="cost", mip_gap=mip_gap)
+        self.comm_model = self.run_communicate(self.comm_protocol, mip_gap=mip_gap)
 
         try:
             indep_wds_cost = self.indep_model.get_systemwise_costs(self.scenario.t)[0]
@@ -299,7 +299,7 @@ def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
     return model
 
 
-def analyze_single_scenario(results_df: pd.DataFrame, idx: int):
+def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: int, mip_gap):
     scenario = results_df.iloc[idx]
 
     scenario_params = {
@@ -315,11 +315,11 @@ def analyze_single_scenario(results_df: pd.DataFrame, idx: int):
 
     sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False, final_tanks_ratio=0.2,
                      comm_protocol=CommunicateProtocolBasic, rand_scenario=False, scenario_const=scenario_params)
-    res = sim.run_and_record()
+    sim_results, time_series_ls = sim.run_and_record(mip_gap=mip_gap)
     sim.plot_wds()
 
 
-def run_random_scenarios(n, final_tanks_ratio, export_path=''):
+def run_random_scenarios(n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
     for _ in range(n):
         sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", opt_display=False,
