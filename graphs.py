@@ -75,11 +75,17 @@ class OptGraphs:
         for i, (tank_id, row) in enumerate(self.wds.tanks.iterrows()):
             values = [row['init_vol']] + list(self.x['vol'].get()[i, :])
             title = f'Tank {tank_id}'
-            axes[i] = time_series(x=range(len(values)), y=values,
+
+            axes[i] = time_series(x=range(self.opt.start_time, self.opt.start_time + len(values)), y=values,
                                   title=title, ax=axes[i], ylabel=f'Volume ($m^3)$', leg_label=leg_label)
             axes[i].legend()
 
-        plt.tight_layout()
+            axes[i].set_xticks([_ for _ in range(self.opt.start_time, self.opt.start_time + len(values))],
+                               [_ % 24 for _ in range(self.opt.start_time, self.opt.start_time + len(values))])
+            axes[i].xaxis.set_major_locator(mtick.MaxNLocator(integer=True))
+
+        fig.subplots_adjust(left=0.1, bottom=0.16, right=0.96, top=0.9, wspace=0.3)
+        fig.text(0.5, 0.04, 'Time (hr)', ha='center')
         return fig
 
     def plot_all_pumps(self):
