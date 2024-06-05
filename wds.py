@@ -2,12 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import yaml
-import bisect
 from scipy.interpolate import UnivariateSpline
-
-import utils
-
-pipes_max_flow = {100: 40, 150: 100, 200: 125, 250: 250, 300: 400, 330: 525, 480: 1450, 680: 1750}
 
 
 class WDSPWL:
