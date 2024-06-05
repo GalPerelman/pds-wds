@@ -232,9 +232,14 @@ class Simulation:
             comm_wds_penalties = list(self.comm_model.x['penalty_final_vol'].get().T[0])
             indep_wds_pumped_vol = (self.indep_model.wds.get_pumped_vol(self.indep_model.x['pumps'].get())).sum()
             comm_wds_pumped_vol = (self.comm_model.wds.get_pumped_vol(self.comm_model.x['pumps'].get())).sum()
-            indep_final_vol = self.indep_model.x['vol'].get()[:, self.scenario.t-1]
+            indep_final_vol = self.indep_model.x['vol'].get()[:, self.scenario.t - 1]
             comm_final_vol = self.comm_model.x['vol'].get()[:, -1]
-        except RuntimeError:
+
+            coop_ls_ts = (self.joint_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            comm_ls_ts = (self.comm_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            indep_ls_ts = (self.indep_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+
+        except (RuntimeError, AttributeError):
             indep_wds_cost = None
             comm_wds_cost = None
             indep_wds_penalties = None
@@ -243,30 +248,36 @@ class Simulation:
             comm_wds_pumped_vol = None
             indep_final_vol = None
             comm_final_vol = None
+            coop_ls_ts = None
+            comm_ls_ts = None
+            indep_ls_ts = None
 
-        return {
-            "cooperative": self.joint_model.objective,
-            "independent": self.indep_model.objective,
-            "communicative": self.comm_model.objective,
-            "independent_wds_penalties": indep_wds_penalties,
-            "communicate_wds_penalties": comm_wds_penalties,
-            "independent_wds_cost": indep_wds_cost,
-            "communicate_wds_cost": comm_wds_cost,
-            "independent_wds_vol": indep_wds_pumped_vol,
-            "communicate_wds_vol": comm_wds_pumped_vol,
-            "independent_final_vol": indep_final_vol,
-            "communicate_final_vol": comm_final_vol,
-            "t": self.scenario.t,
-            "start_time": self.scenario.start_time,
-            "wds_demand_factor": self.scenario.wds_demand_factor,
-            "pds_demand_factor": self.scenario.pds_demand_factor,
-            "pv_factor": self.scenario.pv_factor,
-            "outage_lines": self.scenario.outage_lines,
-            "n_outage_lines": len(self.scenario.outage_lines),
-            "tanks_state": self.scenario.tanks_state,
-            "batteries_state": self.scenario.batteries_state,
-            "final_tanks_ratio": self.final_tanks_ratio
-        }
+        return (
+            {
+                "cooperative": self.joint_model.objective,
+                "independent": self.indep_model.objective,
+                "communicative": self.comm_model.objective,
+                "independent_wds_penalties": indep_wds_penalties,
+                "communicate_wds_penalties": comm_wds_penalties,
+                "independent_wds_cost": indep_wds_cost,
+                "communicate_wds_cost": comm_wds_cost,
+                "independent_wds_vol": indep_wds_pumped_vol,
+                "communicate_wds_vol": comm_wds_pumped_vol,
+                "independent_final_vol": indep_final_vol,
+                "communicate_final_vol": comm_final_vol,
+                "t": self.scenario.t,
+                "start_time": self.scenario.start_time,
+                "wds_demand_factor": self.scenario.wds_demand_factor,
+                "pds_demand_factor": self.scenario.pds_demand_factor,
+                "pv_factor": self.scenario.pv_factor,
+                "outage_lines": self.scenario.outage_lines,
+                "n_outage_lines": len(self.scenario.outage_lines),
+                "tanks_state": self.scenario.tanks_state,
+                "batteries_state": self.scenario.batteries_state,
+                "final_tanks_ratio": self.final_tanks_ratio
+            },
+            {"coop_ls": coop_ls_ts, "comm_ls": comm_ls_ts, "indep_ls": indep_ls_ts}
+        )
 
     def plot_wds(self):
         pumps_names = [col for col in self.base_wds.combs.columns if col.startswith("pump_")]
@@ -321,16 +332,33 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
 
 def run_random_scenarios(n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
+    coop_ls = pd.DataFrame()
+    comm_ls = pd.DataFrame()
+    indep_ls = pd.DataFrame()
     for _ in range(n):
+
         sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", opt_display=False,
                          final_tanks_ratio=final_tanks_ratio, comm_protocol=CommunicateProtocolBasic,
                          rand_scenario=True)
 
-        temp = sim.run_and_record()
-        temp = utils.convert_arrays_to_lists(temp)
-        results.append(temp)
+        sim_results, time_series_ls = sim.run_and_record(mip_gap=mip_gap)
+        sim_results = utils.convert_arrays_to_lists(sim_results)
+        results.append(sim_results)
+
+        coop_ls = pd.concat([coop_ls, pd.DataFrame(time_series_ls['coop_ls']).T], axis=0)
+        comm_ls = pd.concat([comm_ls, pd.DataFrame(time_series_ls['comm_ls']).T], axis=0)
+        indep_ls = pd.concat([indep_ls, pd.DataFrame(time_series_ls['indep_ls']).T], axis=0)
+
         if export_path:
-            pd.DataFrame(results).to_csv(export_path)
+            export_df(pd.DataFrame(results), export_path)
+            export_df(coop_ls, export_path[:-4] + "_coop_ls.csv")
+            export_df(comm_ls, export_path[:-4] + "_comm_ls.csv")
+            export_df(indep_ls, export_path[:-4] + "_indep_ls.csv")
+
+
+def export_df(df, path):
+    with open(path, 'w', newline='') as file:
+        df.to_csv(file)
 
 
 if __name__ == "__main__":
