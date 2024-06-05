@@ -99,11 +99,11 @@ class Opt:
         self.model.min(pds_cost + wds_cost)
 
     def bus_balance(self):
-        r = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
-                                       param='r_pu')
-        x = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
-                                       param='x_pu')
-        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
+        r = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
+                                   param='r_pu')
+        x = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus', direction='in',
+                                   param='x_pu')
+        a = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
 
         self.model.st(self.pds.gen_mat @ self.x['gen_p'] + a @ self.x['p']
                       - r @ self.x['I']
@@ -120,7 +120,7 @@ class Opt:
     def energy_conservation(self):
         r = self.pds.lines['r_pu'].values.reshape(1, -1)
         x = self.pds.lines['x_pu'].values.reshape(1, -1)
-        a = utils.get_connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
+        a = utils.connectivity_mat(self.pds.lines, from_col='from_bus', to_col='to_bus')
         self.model.st(a.T @ self.x['v']
                       + 2 * ((self.x['p'].T * r).T + (self.x['q'].T * x).T)
                       - (self.x['I'].T * (r ** 2 + x ** 2)).T
@@ -140,7 +140,7 @@ class Opt:
 
     def water_mass_balance(self):
         not_source = utils.get_mat_for_type(self.wds.nodes, 'reservoir', inverse=True)  # all but reservoirs
-        a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
+        a = utils.connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
 
         tanks_mat = utils.get_mat_for_type(self.wds.nodes, 'tank')
         # rows - all nodes. columns - only tanks
@@ -178,7 +178,7 @@ class Opt:
         numpy has a function called tensordot that can perform the dot product over specified axes for arrays of
         any dimensionality.
         """
-        a = utils.get_connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
+        a = utils.connectivity_mat(self.wds.pipes, from_col='from_node', to_col='to_node')
         # exclude turbines from headloss constraint
         b = utils.get_mat_for_type(data=self.wds.pipes, element_type='turbine', inverse=True)
         bb = np.tensordot(b, self.pl_head_mat, axes=([1], [0]))
