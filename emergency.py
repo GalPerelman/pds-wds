@@ -310,7 +310,7 @@ def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
     return model
 
 
-def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: int, mip_gap):
+def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: int, mip_gap, opt_display):
     scenario = results_df.iloc[idx]
 
     scenario_params = {
@@ -324,7 +324,7 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
         "batteries_state": np.array(scenario["batteries_state"])
     }
 
-    sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False, final_tanks_ratio=0.2,
+    sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=opt_display, final_tanks_ratio=0.2,
                      comm_protocol=CommunicateProtocolBasic, rand_scenario=False, scenario_const=scenario_params)
     sim_results, time_series_ls = sim.run_and_record(mip_gap=mip_gap)
     sim.plot_wds()
