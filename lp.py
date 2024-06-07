@@ -393,17 +393,3 @@ class Optimizer:
                            + (self.pds.bus['c'].values.reshape(-1, 1) * self.t).sum()
                            )
         return wds_cost, grid_cost, generation_cost
-
-
-def solve_water(pds_dir, wds_dir):
-    model = Optimizer(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
-    model.build_water_problem()
-    model.solve()
-    return model
-
-
-def solve_combined(pds_dir, wds_dir, x_pumps=None):
-    model = Optimizer(pds_data=os.path.join('data', pds_dir), wds_data=os.path.join('data', wds_dir), t=24)
-    model.build_combined_problem(x_pumps)
-    model.solve()
-    return model

@@ -330,14 +330,14 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
     sim.plot_wds()
 
 
-def run_random_scenarios(n, final_tanks_ratio, mip_gap, export_path=''):
+def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
     coop_ls = pd.DataFrame()
     comm_ls = pd.DataFrame()
     indep_ls = pd.DataFrame()
     for _ in range(n):
 
-        sim = Simulation(pds_data="data/pds_emergency_futurized", wds_data="data/wds_wells", opt_display=False,
+        sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False,
                          final_tanks_ratio=final_tanks_ratio, comm_protocol=CommunicateProtocolBasic,
                          rand_scenario=True)
 
@@ -359,36 +359,3 @@ def run_random_scenarios(n, final_tanks_ratio, mip_gap, export_path=''):
 def export_df(df, path):
     with open(path, 'w', newline='') as file:
         df.to_csv(file)
-
-
-if __name__ == "__main__":
-    global_seed = 42
-    os.environ['PYTHONHASHSEED'] = str(global_seed)
-    random.seed(global_seed)
-    np.random.seed(global_seed)
-    np.set_printoptions(suppress=True, precision=4)
-
-    pds_data = "data/pds_emergency_futurized"
-    wds_data = "data/wds_wells"
-
-    pds = PDS(pds_data)
-    wds = WDS(wds_data)
-
-    # Main procedure - run 1000 extreme scenarios and compare the three strategies
-    export_file = f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_results.csv'
-    run_random_scenarios(n=1000, final_tanks_ratio=0.2, export_path=export_file)
-
-    # Analyze specific scenarios to demonstrate WDS behaviour
-    # import results_analysis
-    # data = results_analysis.load_results("results_mip_soft-tanks_rand-start-detailed.csv", drop_nans=False)
-    # data = results_analysis.load_results("20240502-165213_results.csv", drop_nans=False)
-    # analyze_single_scenario(data, 673)
-    # analyze_single_scenario(data, 995)
-
-    # example for changing pump according to failure location
-    # line 31 is outage - well 1 generator cannot contribute to PDS
-    # all pumping is shifted to well 1 to utilize the generator as much as possible
-    # and reduce stress from the other two generators
-    # analyze_single_scenario(data, 722)
-
-    plt.show()
