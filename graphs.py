@@ -4,7 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 from matplotlib.lines import Line2D
+import matplotlib.ticker as mtick
 import matplotlib.patheffects as PathEffects
+import seaborn as sns
 
 
 class OptGraphs:
@@ -19,13 +21,21 @@ class OptGraphs:
 
         df = edges_data.copy()
         if edges_x:
-            edges_values = {i: round(self.x[edges_x].get()[i, t] * edges_factor, 1) for i in range(len(edges_data))}
+            if t is None:
+                edges_values = {i: round(self.x[edges_x].get()[i, :].sum() * edges_factor, 1)
+                                for i in range(len(edges_data))}
+            else:
+                edges_values = {i: round(self.x[edges_x].get()[i, t] * edges_factor, 1)
+                                for i in range(len(edges_data))}
             df['w'] = edges_values.values()
         else:
             df['w'] = 1
 
         num_nodes = len(pd.unique(edges_data[[from_col, to_col]].values.ravel('K')))
-        nodes_values = {i: round(self.x[nodes_x].get()[i, t] * nodes_factor, 1) for i in range(num_nodes)}
+        if t is None:
+            nodes_values = {i: round(self.x[nodes_x].get()[i, :].sum() * nodes_factor, 1) for i in range(num_nodes)}
+        else:
+            nodes_values = {i: round(self.x[nodes_x].get()[i, t] * nodes_factor, 1) for i in range(num_nodes)}
 
         G = nx.from_pandas_edgelist(df, source=from_col, target=to_col, edge_attr='w')
 
@@ -59,7 +69,7 @@ class OptGraphs:
             fig, ax = plt.subplots(figsize=(8, 4))
 
         ax.bar(range(self.pds.n_bus), self.x['v'].get()[:, t])
-        return fig
+        return ax
 
     def plot_all_tanks(self, fig=None, leg_label=None):
         n = self.wds.n_tanks
@@ -142,12 +152,11 @@ class OptGraphs:
             axes = fig.axes
 
         for i in range(x.shape[0]):
-            gen_name = f"{gen_idx[i]}-{self.pds.generators.loc[gen_idx[i], 'name']}"
             axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)',
                                   leg_label=f"{leg_label}")
             axes[i].legend()
             axes[i].ticklabel_format(useOffset=False, style='plain')
-            axes[i].set_title(f"{gen_idx[i]}")
+            axes[i].set_title(f"Generator {gen_idx[i]}")
 
         return fig
 
