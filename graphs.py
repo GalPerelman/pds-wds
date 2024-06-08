@@ -174,17 +174,65 @@ class OptGraphs:
 
         return fig
 
-    def plot_penalty(self, ax=None, leg_label=''):
+    def plot_lines(self, fig=None):
+        x = self.x['p'].get() * self.pds.pu_to_kw
+        ncols = max(1, int(math.ceil(math.sqrt(x.shape[0]))))
+        nrows = max(1, int(math.ceil(x.shape[0] / ncols)))
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(12, 6))
+            axes = np.atleast_2d(axes).ravel()
+
+        else:
+            axes = fig.axes
+
+        for i in range(x.shape[0]):
+            axes[i] = time_series(range(x.shape[1]), x[i, :], ax=axes[i], ylabel='Power (kW)')
+            axes[i].set_title(f"Line {i}")
+
+        fig.tight_layout()
+
+    def plot_penalty(self, ax=None, leg_label='', title=''):
         if ax is None:
             fig, ax = plt.subplots()
 
-        p = (self.pds.bus_criticality * self.x['penalty_p'].get() * self.pds.pu_to_kw).sum(axis=0)
-        ax.bar(range(len(p)), p, edgecolor='k', alpha=0.5)
-        ax.plot([], [], ' ', label=f"{leg_label}\nPenalty: {p.sum():.0f} kWhr")
+        obj = (self.pds.bus_criticality * self.x['penalty_p'].get() * self.pds.pu_to_kw).sum(axis=0)
+        penalty = (self.x['penalty_p'].get() * self.pds.pu_to_kw).sum(axis=0)
+        ax.bar(range(len(penalty)), penalty, edgecolor='k', alpha=0.5)
+        # ax.plot([], [], ' ', label=f"{leg_label}\nPenalty: {p.sum():.0f} kWhr")
+        ax.text(0.05, 0.9, f"Objective: {obj.sum():.0f}\n"
+                            f"Penalty: {penalty.sum():,.0f} kWhr", transform=ax.transAxes)
 
         ax.set_ylabel('Power (kW)')
-        ax.legend(handletextpad=-2.0, handlelength=0, frameon=False)
+        ax.set_ylim(0, 1200)
+        # ax.legend(frameon=False)
+        if title:
+            ax.set_title(title)
+
+        # penalties heatmap
+        plt.figure()
+        p = np.round((self.x['penalty_p'].get() * self.pds.pu_to_kw), 1)
+        p = (p-np.min(p))/(np.max(p)-np.min(p))
+        sns.heatmap(p, linewidth=.5, cmap="Reds", linecolor='k', vmin=p.min(), vmax=p.max(), annot=True, fmt='.1f')
         return ax
+
+    def pumps_results(self, fig=None, leg_label=''):
+        n = self.wds.n_stations
+        ncols = max(1, int(math.ceil(math.sqrt(n))))
+        nrows = max(1, int(math.ceil(n / ncols)))
+
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, figsize=(8, 4))
+            axes = np.atleast_2d(axes).ravel()
+        else:
+            axes = fig.axes
+
+        for i, station_name in enumerate(self.wds.combs['station'].unique()):
+            idx = self.wds.combs.loc[self.wds.combs['station'] == station_name].index
+            axes[i].plot(self.wds.combs.loc[idx, 'total_power'] @ self.x['pumps'].get()[idx, :], label=leg_label)
+            axes[i].grid(True)
+
+        plt.tight_layout()
+        return fig
 
 
 def plot_demands(pds, wds):
@@ -217,3 +265,12 @@ def time_series(x, y, ax=None, ylabel='', title='', leg_label=''):
         ax.set_title(title)
 
     return ax
+
+
+def plot_matrix(mat, norm=False):
+    plt.figure()
+    p = np.round(mat, 1)
+    if norm:
+        p = (p - np.min(p)) / (np.max(p) - np.min(p))
+    sns.heatmap(p, linewidth=.5, cmap="Reds", linecolor='k', vmin=p.min(), vmax=p.max())
+
