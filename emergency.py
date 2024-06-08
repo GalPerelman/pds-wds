@@ -73,7 +73,7 @@ class CommunicateProtocolMaxInfo:
         self.scenario = scenario
 
     def get_pumps_penalties(self):
-        # run cooperative - assuming max information sharing, power utility can run cooperative model
+        # run centralized - assuming max information sharing, power utility can run centralized model
         model = opt_resilience(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
         # get pumps schedule
         pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
@@ -145,9 +145,9 @@ class Simulation:
         self.base_wds = WDS(self.wds_data)
         self.scenario = self.draw_scenario()
 
-        self.joint_model = None
-        self.indep_model = None
-        self.comm_model = None
+        self.central_model = None
+        self.decentral_model = None
+        self.coord_dist_model = None
 
     def draw_scenario(self):
         s = Scenario(n_tanks=self.base_wds.n_tanks,
@@ -163,8 +163,8 @@ class Simulation:
             pass
         return s
 
-    def run_individual(self, wds_objective, mip_gap):
-        # INDIVIDUAL CASE - WDS IS NOT AWARE TO POWER EMERGENCY AND OPTIMIZES FOR 24 HR
+    def run_decentralized(self, wds_objective, mip_gap):
+        # INDIVIDUAL OPERATION (Independent) - WDS IS NOT AWARE TO POWER EMERGENCY AND OPTIMIZES FOR 24 HR
         scenario = copy.deepcopy(self.scenario)
         scenario.t = 24
         model_wds = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=scenario,
@@ -184,7 +184,7 @@ class Simulation:
             # solves for 24 hours but take only the scenario duration first steps for comparison purposes
             x_pumps = model_wds.x['pumps'].get()[:, :self.scenario.t]
 
-            # Non-cooperative - solve resilience problem with given WDS operation
+            # Decentralized (no collaboration) - solve resilience problem with given WDS operation
             model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                               display=self.opt_display)
             for line_idx in self.scenario.outage_lines:
@@ -194,7 +194,7 @@ class Simulation:
 
         return model
 
-    def run_cooperated(self, mip_gap):
+    def run_centralized(self, mip_gap):
         model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                           display=self.opt_display)
         for line_idx in self.scenario.outage_lines:
@@ -203,7 +203,7 @@ class Simulation:
         model.solve(mip_gap)
         return model
 
-    def run_communicate(self, comm_protocol, mip_gap):
+    def run_coordinated_distributed(self, comm_protocol, mip_gap):
         p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
         w = p.get_pumps_penalties()
         if w is None:
@@ -221,50 +221,50 @@ class Simulation:
         return model
 
     def run_and_record(self, mip_gap):
-        self.joint_model = self.run_cooperated(mip_gap=mip_gap)
-        self.indep_model = self.run_individual(wds_objective="cost", mip_gap=mip_gap)
-        self.comm_model = self.run_communicate(self.comm_protocol, mip_gap=mip_gap)
+        self.central_model = self.run_centralized(mip_gap=mip_gap)
+        self.decentral_model = self.run_decentralized(wds_objective="cost", mip_gap=mip_gap)
+        self.coord_dist_model = self.run_coordinated_distributed(self.comm_protocol, mip_gap=mip_gap)
 
         try:
-            indep_wds_cost = self.indep_model.get_systemwise_costs(self.scenario.t)[0]
-            comm_wds_cost = self.comm_model.get_systemwise_costs(self.scenario.t)[0]
-            indep_wds_penalties = list(self.indep_model.x['penalty_final_vol'].get().T[0])
-            comm_wds_penalties = list(self.comm_model.x['penalty_final_vol'].get().T[0])
-            indep_wds_pumped_vol = (self.indep_model.wds.get_pumped_vol(self.indep_model.x['pumps'].get())).sum()
-            comm_wds_pumped_vol = (self.comm_model.wds.get_pumped_vol(self.comm_model.x['pumps'].get())).sum()
-            indep_final_vol = self.indep_model.x['vol'].get()[:, self.scenario.t - 1]
-            comm_final_vol = self.comm_model.x['vol'].get()[:, -1]
+            decentral_wds_cost = self.decentral_model.get_systemwise_costs(self.scenario.t)[0]
+            coord_dist_wds_cost = self.coord_dist_model.get_systemwise_costs(self.scenario.t)[0]
+            decentral_wds_penalties = list(self.decentral_model.x['penalty_final_vol'].get().T[0])
+            coord_dist_wds_penalties = list(self.coord_dist_model.x['penalty_final_vol'].get().T[0])
+            decentral_wds_pumped_vol = (self.decentral_model.wds.get_pumped_vol(self.decentral_model.x['pumps'].get())).sum()
+            coord_dist_wds_pumped_vol = (self.coord_dist_model.wds.get_pumped_vol(self.coord_dist_model.x['pumps'].get())).sum()
+            decentral_final_vol = self.decentral_model.x['vol'].get()[:, self.scenario.t - 1]
+            coord_dist_final_vol = self.coord_dist_model.x['vol'].get()[:, -1]
 
-            coop_ls_ts = (self.joint_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
-            comm_ls_ts = (self.comm_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
-            indep_ls_ts = (self.indep_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            central_ls_ts = (self.central_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            coord_dist_ls_ts = (self.coord_dist_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            decentral_ls_ts = (self.decentral_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
 
         except (RuntimeError, AttributeError):
-            indep_wds_cost = None
-            comm_wds_cost = None
-            indep_wds_penalties = None
-            comm_wds_penalties = None
-            indep_wds_pumped_vol = None
-            comm_wds_pumped_vol = None
-            indep_final_vol = None
-            comm_final_vol = None
-            coop_ls_ts = None
-            comm_ls_ts = None
-            indep_ls_ts = None
+            decentral_wds_cost = None
+            coord_dist_wds_cost = None
+            decentral_wds_penalties = None
+            coord_dist_wds_penalties = None
+            decentral_wds_pumped_vol = None
+            coord_dist_wds_pumped_vol = None
+            decentral_final_vol = None
+            coord_dist_final_vol = None
+            central_ls_ts = None
+            coord_dist_ls_ts = None
+            decentral_ls_ts = None
 
         return (
             {
-                "cooperative": self.joint_model.objective,
-                "independent": self.indep_model.objective,
-                "communicative": self.comm_model.objective,
-                "independent_wds_penalties": indep_wds_penalties,
-                "communicate_wds_penalties": comm_wds_penalties,
-                "independent_wds_cost": indep_wds_cost,
-                "communicate_wds_cost": comm_wds_cost,
-                "independent_wds_vol": indep_wds_pumped_vol,
-                "communicate_wds_vol": comm_wds_pumped_vol,
-                "independent_final_vol": indep_final_vol,
-                "communicate_final_vol": comm_final_vol,
+                "centralized": self.central_model.objective,
+                "decentralized": self.decentral_model.objective,
+                "coordinated_distributed": self.coord_dist_model.objective,
+                "decentralized_wds_penalties": decentral_wds_penalties,
+                "coordinated_distributed_wds_penalties": coord_dist_wds_penalties,
+                "decentralized_wds_cost": decentral_wds_cost,
+                "coordinated_distributed_wds_cost": coord_dist_wds_cost,
+                "decentralized_wds_vol": decentral_wds_pumped_vol,
+                "coordinated_distributed_wds_vol": coord_dist_wds_pumped_vol,
+                "decentralized_final_vol": decentral_final_vol,
+                "coordinated_distributed_final_vol": coord_dist_final_vol,
                 "t": self.scenario.t,
                 "start_time": self.scenario.start_time,
                 "wds_demand_factor": self.scenario.wds_demand_factor,
@@ -276,26 +276,26 @@ class Simulation:
                 "batteries_state": self.scenario.batteries_state,
                 "final_tanks_ratio": self.final_tanks_ratio
             },
-            {"coop_ls": coop_ls_ts, "comm_ls": comm_ls_ts, "indep_ls": indep_ls_ts}
+            {"cantral_ls": central_ls_ts, "coord_dist_ls": coord_dist_ls_ts, "decantral_ls": decentral_ls_ts}
         )
 
     def plot_wds(self):
         pumps_names = [col for col in self.base_wds.combs.columns if col.startswith("pump_")]
         fig_gantt, axes = plt.subplots(nrows=2, sharex=True)
 
-        g = graphs.OptGraphs(self.indep_model)
-        ax_independent = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[0])
-        ax_independent.set_title("Independent")
-        fig = g.plot_all_tanks(leg_label="Independent")
-        fig_bat = g.plot_batteries(leg_label="Independent")
-        fig_gen = g.plot_all_generators(leg_label="Independent")
+        g = graphs.OptGraphs(self.decentral_model)
+        ax_decentralized = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[0])
+        ax_decentralized.set_title("Decentralized")
+        fig = g.plot_all_tanks(leg_label="Decentralized")
+        fig_bat = g.plot_batteries(leg_label="Decentralized")
+        fig_gen = g.plot_all_generators(leg_label="Decentralized")
 
-        g = graphs.OptGraphs(self.comm_model)
-        ax_communicate = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
-        ax_communicate.set_title("Communicative")
-        fig = g.plot_all_tanks(fig=fig, leg_label="Communicative")
-        fig_bat = g.plot_batteries(leg_label="Communicative", fig=fig_bat)
-        fig_gen = g.plot_all_generators(leg_label="Communicative", fig=fig_gen)
+        g = graphs.OptGraphs(self.coord_dist_model)
+        ax_cd = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
+        ax_cd.set_title("Coord-Distrib")
+        fig = g.plot_all_tanks(fig=fig, leg_label="Coord-Distrib")
+        fig_bat = g.plot_batteries(leg_label="Coord-Distrib", fig=fig_bat)
+        fig_gen = g.plot_all_generators(leg_label="Coord-Distrib", fig=fig_gen)
 
         fig_gantt.subplots_adjust(left=0.13, bottom=0.15, right=0.92, top=0.9, hspace=0.35)
         fig_gantt.text(0.5, 0.04, 'Time (hr)', ha='center')
@@ -332,9 +332,9 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
 
 def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
-    coop_ls = pd.DataFrame()
-    comm_ls = pd.DataFrame()
-    indep_ls = pd.DataFrame()
+    central_ls = pd.DataFrame()
+    coord_dist = pd.DataFrame()
+    decentral_ls = pd.DataFrame()
     for _ in range(n):
 
         sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False,
@@ -345,15 +345,15 @@ def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, expo
         sim_results = utils.convert_arrays_to_lists(sim_results)
         results.append(sim_results)
 
-        coop_ls = pd.concat([coop_ls, pd.DataFrame(time_series_ls['coop_ls']).T], axis=0)
-        comm_ls = pd.concat([comm_ls, pd.DataFrame(time_series_ls['comm_ls']).T], axis=0)
-        indep_ls = pd.concat([indep_ls, pd.DataFrame(time_series_ls['indep_ls']).T], axis=0)
+        central_ls = pd.concat([central_ls, pd.DataFrame(time_series_ls['cantral_ls']).T], axis=0)
+        coord_dist = pd.concat([coord_dist, pd.DataFrame(time_series_ls['coord_dist_ls']).T], axis=0)
+        decentral_ls = pd.concat([decentral_ls, pd.DataFrame(time_series_ls['decantral_ls']).T], axis=0)
 
         if export_path:
             export_df(pd.DataFrame(results), export_path)
-            export_df(coop_ls, export_path[:-4] + "_coop_ls.csv")
-            export_df(comm_ls, export_path[:-4] + "_comm_ls.csv")
-            export_df(indep_ls, export_path[:-4] + "_indep_ls.csv")
+            export_df(central_ls, export_path[:-4] + "_cantral_ls.csv")
+            export_df(coord_dist, export_path[:-4] + "_coord_dist_ls.csv")
+            export_df(decentral_ls, export_path[:-4] + "_decantral_ls.csv")
 
 
 def export_df(df, path):
