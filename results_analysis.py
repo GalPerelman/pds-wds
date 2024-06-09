@@ -87,7 +87,7 @@ def ls_reduction(data, explanatory_var, x_label):
     fig, ax = plt.subplots()
     data = data.sort_values(explanatory_var)
     ax.scatter(data[explanatory_var], data["coord_dist_reduction"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
-               zorder=2, label="Coord-Distrib")
+               zorder=2, label="Coordinated Distributed")
     ax.scatter(data[explanatory_var], data["central_reduction"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
                zorder=1, label="Centralized")
 
@@ -97,7 +97,7 @@ def ls_reduction(data, explanatory_var, x_label):
     ax.yaxis.set_major_formatter(mtick.PercentFormatter())
 
     ax.set_xlabel(x_label)
-    ax.set_ylabel("Load Shedding Reduction (%)")
+    ax.set_ylabel("LS Reduction (%)")
     plt.subplots_adjust(left=0.15)
 
 
