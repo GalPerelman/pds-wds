@@ -411,10 +411,12 @@ def mpl_parallel_coordinates(data):
 
 
 def area_plot(data):
-    df = data.sort_values(by="decentralized", ascending=True)[['decentralized', 'coordinated_distributed', 'centralized']]
+    results_cols = ['decentralized', 'coordinated_distributed', 'centralized']
+    df = data.sort_values(by="decentralized", ascending=True)[results_cols]
     fig, ax = plt.subplots()
     ax.bar(range(len(df)), df.iloc[:, :]['decentralized'], alpha=0.8, color=COLORS[2], width=1, label="Decentralized")
-    ax.bar(range(len(df)), df.iloc[:, :]['coordinated_distributed'], alpha=0.8, color=COLORS[0], width=1, label="Coord-Distrib")
+    ax.bar(range(len(df)), df.iloc[:, :]['coordinated_distributed'], alpha=0.8, color=COLORS[0], width=1,
+           label="Coordinated\nDistributed")
     ax.bar(range(len(df)), df.iloc[:, :]['centralized'], alpha=0.8, color=COLORS[1], width=1, label="Centralized")
 
     ax.grid()
@@ -422,10 +424,10 @@ def area_plot(data):
     ax.legend()
     ax.set_ylabel("Total LS (kWhr)")
 
-    df['Coord-Distrib'] = df['coordinated_distributed'] - df['decentralized']
+    df['Coordinated\nDistributed'] = df['coordinated_distributed'] - df['decentralized']
     df['Centralized'] = df['centralized'] - df['decentralized']
-    df = df[['Centralized', 'Coord-Distrib']]
-    df = df[df['Coord-Distrib'] <= 0] * -1
+    df = df[['Centralized', 'Coordinated\nDistributed']]
+    df = df[df['Coordinated\nDistributed'] <= 0] * -1
     df = df.sort_values('Centralized')
     df.reset_index(inplace=True, drop=True)
 
