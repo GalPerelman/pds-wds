@@ -53,19 +53,22 @@ def load_results(results_file_path: str, drop_nans=True):
 def box(data):
     fig, ax = plt.subplots()
     positions = [0.2, 0.6, 1]
-    box_columns = ["decentralized", "coordinated_distributed", "centralized"]
+    box_columns = {"decentralized": "Decentralized",
+                   "coordinated_distributed": "Coordinated\nDistributed",
+                   "centralized": "Centralized"}
 
-    df = pd.DataFrame({"mean": data[box_columns].mean(),
-                       "std": data[box_columns].std(),
-                       "max": data[box_columns].max(),
-                       "min": data[box_columns].min(),
+    df = pd.DataFrame({"mean": data[box_columns.keys()].mean(),
+                       "std": data[box_columns.keys()].std(),
+                       "max": data[box_columns.keys()].max(),
+                       "min": data[box_columns.keys()].min(),
                        }).T
     df["comm_deviation"] = 100 * (df["coordinated_distributed"] - df["centralized"]) / df["centralized"]
     df["indep_deviation"] = 100 * (df["decentralized"] - df["centralized"]) / df["centralized"]
     print(df)
 
-    ax.boxplot(data[box_columns],
-               labels=box_columns, positions=positions, showfliers=False, showmeans=True, patch_artist=True,
+    ax.boxplot(data[box_columns.keys()],
+               labels=box_columns.values(),
+               positions=positions, showfliers=False, showmeans=True, patch_artist=True,
                boxprops=dict(facecolor="w"),
                meanprops={'markerfacecolor': 'C0', 'markeredgecolor': "k", "linewidth": 0.1},
                medianprops=dict(linewidth=2, color='C0'))
