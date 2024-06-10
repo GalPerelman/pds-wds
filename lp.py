@@ -355,7 +355,7 @@ class Optimizer:
                       + lhs[:, self.wds.n_combs * self.t:] @ self.x['vol'].flatten()
                       == np.squeeze(rhs))
 
-    def solve(self, mip_gap=0.01):
+    def solve(self, mip_gap):
         self.model.solve(grb, display=False, params={"TimeLimit": 500, 'MIPgap': mip_gap})
         self.objective, self.status = self.model.solution.objval, self.model.solution.status
         if self.status in [gurobipy.gurobipy.GRB.OPTIMAL, gurobipy.gurobipy.GRB.SUBOPTIMAL]:
