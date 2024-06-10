@@ -93,21 +93,21 @@ class CommunicateProtocolBasic:
         self.wds_data = wds_data
         self.scenario = scenario
 
-    def get_wds_standard(self):
+    def get_wds_standard(self, mip_gap):
         """
         wds standard schedule - based on wds cost minimization
         """
         try:
             model_wds = lp.Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
             model_wds.build_water_problem(obj="cost", final_tanks_ratio=1, w=1)
-            model_wds.solve()
+            model_wds.solve(mip_gap)
             return model_wds.x['pumps'].get()
         except RuntimeError:
             return
 
-    def get_pumps_penalties(self):
+    def get_pumps_penalties(self, mip_gap):
         # get the standard wds operation
-        x_pumps = self.get_wds_standard()
+        x_pumps = self.get_wds_standard(mip_gap)
         if x_pumps is None:
             return
 
@@ -117,7 +117,7 @@ class CommunicateProtocolBasic:
             model.build_inner_pds_problem(x_pumps=x_pumps)
             for line_idx in self.scenario.outage_lines:
                 model.disable_power_line(line_idx)
-            model.solve()
+            model.solve(mip_gap)
 
             pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
             pumps_penalties = np.ones(pumps_penalties.shape) - pumps_penalties
@@ -205,7 +205,7 @@ class Simulation:
 
     def run_coordinated_distributed(self, comm_protocol, mip_gap):
         p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
-        w = p.get_pumps_penalties()
+        w = p.get_pumps_penalties(mip_gap)
         if w is None:
             model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display)
             model.objective = None
@@ -216,7 +216,8 @@ class Simulation:
             model_wds.build_water_problem(obj="emergency", final_tanks_ratio=self.final_tanks_ratio, w=w)
             model_wds.solve(mip_gap)
             x_pumps = model_wds.x['pumps'].get()  # planned schedule (can be seen also as historic nominal schedule)
-            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, x_pumps=x_pumps)
+            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, mip_gap,
+                                   x_pumps=x_pumps)
 
         return model
 
@@ -301,12 +302,12 @@ class Simulation:
         fig_gantt.text(0.5, 0.04, 'Time (hr)', ha='center')
 
 
-def opt_resilience(pds_data, wds_data, scenario, display, x_pumps=None):
+def opt_resilience(pds_data, wds_data, scenario, display, mip_gap, x_pumps=None):
     model = Optimizer(pds_data=pds_data, wds_data=wds_data, scenario=scenario, display=display)
     for line_idx in scenario.outage_lines:
         model.disable_power_line(line_idx)
     model.build_combined_resilience_problem(x_pumps=x_pumps)
-    model.solve()
+    model.solve(mip_gap)
     return model
 
 
