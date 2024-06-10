@@ -44,7 +44,8 @@ class Optimizer:
         tanks['init_level'] = self.wds.tanks['max_level'] * self.scenario.tanks_state.T
         self.wds.tanks = tanks
 
-        init_batteries_state = self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'max_storage'] * self.scenario.batteries_state.T
+        init_batteries_state = (self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'max_storage']
+                                * self.scenario.batteries_state.T)
         self.pds.bus.loc[self.pds.bus['max_storage'] > 0, 'init_storage'] = init_batteries_state
 
         self.t = self.scenario.t
