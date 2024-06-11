@@ -78,7 +78,7 @@ def box(data):
                 color='C0', fontsize=9, bbox=dict(facecolor='w', edgecolor="k"))
 
     ax.set_xlim(0, 1.2)
-    ax.set_ylabel("Load Shedding (kWhr)")
+    ax.set_ylabel("Load Shedding (kWh)")
     ax.grid()
     plt.subplots_adjust(left=0.15)
 
@@ -153,7 +153,7 @@ def analyze_costs(data):
                                                                  axis=1)
     data["missing_vol"] = data["decentralized_total_final_vol"] - data["coordinated_distributed_total_final_vol"]
 
-    data["missing_cost"] = data["missing_vol"] * 0.44 * 0.25  # vol (m^3) * 0.44 (kWhr / m^3) * 0.25 ($ / kWhr)
+    data["missing_cost"] = data["missing_vol"] * 0.44 * 0.25  # vol (m^3) * 0.44 (kWh / m^3) * 0.25 ($ / kWh)
     data["delta_cost"] = data["coordinated_distributed_wds_cost"] + data["missing_cost"] - data[
         "decentralized_wds_cost"]
     data["delta_cost_percentage"] = 100 * data["delta_cost"] / data["decentralized_wds_cost"]
@@ -422,7 +422,7 @@ def area_plot(data):
     ax.grid()
     ax.set_axisbelow(True)
     ax.legend()
-    ax.set_ylabel("Total LS (kWhr)")
+    ax.set_ylabel("Total LS (kWh)")
 
     df['Coordinated\nDistributed'] = df['coordinated_distributed'] - df['decentralized']
     df['Centralized'] = df['centralized'] - df['decentralized']
@@ -431,9 +431,9 @@ def area_plot(data):
     df = df.sort_values('Centralized')
     df.reset_index(inplace=True, drop=True)
 
-    # ax = df.plot.area()
-    # ax.set_xlabel('Scenario')
-    # ax.set_ylabel("LS Reduction (kWhr)")
+    ax = df.plot.area()
+    ax.set_xlabel('Scenario')
+    ax.set_ylabel("LS Reduction (kWh)")
 
 
 def compare_strategies(data):
@@ -442,10 +442,10 @@ def compare_strategies(data):
                     c=data['decentralized'], cmap="RdYlBu_r")
 
     ax.grid()
-    ax.set_xlabel("Centralized LS reduction (kWhr)")
-    ax.set_ylabel("Coordinated Distributed LS reduction (kWhr)")
+    ax.set_xlabel("Centralized LS reduction (kWh)")
+    ax.set_ylabel("Coordinated Distributed LS reduction (kWh)")
     ax.set_axisbelow(True)
-    plt.colorbar(sc, label="Decentralized LS (kWhr)")
+    plt.colorbar(sc, label="Decentralized LS (kWh)")
 
 
 if __name__ == "__main__":
