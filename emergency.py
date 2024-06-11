@@ -9,10 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import graphs
-import lp
 import utils
 from pds import PDS
-from lp import Optimizer
+from opt import Optimizer
 from wds import WDS
 
 pd.set_option('display.max_columns', 500)
@@ -99,7 +98,7 @@ class CommunicateProtocolBasic:
         wds standard schedule - based on wds cost minimization
         """
         try:
-            model_wds = lp.Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
+            model_wds = Optimizer(self.pds_data, self.wds_data, scenario=self.scenario, display=False)
             model_wds.build_water_problem(obj="cost", final_tanks_ratio=1, w=1)
             model_wds.solve(mip_gap)
             return model_wds.x['pumps'].get()
@@ -114,7 +113,7 @@ class CommunicateProtocolBasic:
 
         else:
             # solve inner pds problem
-            model = lp.Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
+            model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
             model.build_inner_pds_problem(x_pumps=x_pumps)
             for line_idx in self.scenario.outage_lines:
                 model.disable_power_line(line_idx)
