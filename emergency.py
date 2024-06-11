@@ -232,8 +232,10 @@ class Simulation:
             coord_dist_wds_cost = self.coord_dist_model.get_systemwise_costs(self.scenario.t)[0]
             decentral_wds_penalties = list(self.decentral_model.x['penalty_final_vol'].get().T[0])
             coord_dist_wds_penalties = list(self.coord_dist_model.x['penalty_final_vol'].get().T[0])
-            decentral_wds_pumped_vol = (self.decentral_model.wds.get_pumped_vol(self.decentral_model.x['pumps'].get())).sum()
-            coord_dist_wds_pumped_vol = (self.coord_dist_model.wds.get_pumped_vol(self.coord_dist_model.x['pumps'].get())).sum()
+            decentral_wds_pumped_vol = (
+                self.decentral_model.wds.get_pumped_vol(self.decentral_model.x['pumps'].get())).sum()
+            coord_dist_wds_pumped_vol = (
+                self.coord_dist_model.wds.get_pumped_vol(self.coord_dist_model.x['pumps'].get())).sum()
             decentral_final_vol = self.decentral_model.x['vol'].get()[:, self.scenario.t - 1]
             coord_dist_final_vol = self.coord_dist_model.x['vol'].get()[:, -1]
 
