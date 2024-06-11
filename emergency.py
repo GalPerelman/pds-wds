@@ -290,16 +290,25 @@ class Simulation:
         fig = g.plot_all_tanks(leg_label="Decentralized")
         fig_bat = g.plot_batteries(leg_label="Decentralized")
         fig_gen = g.plot_all_generators(leg_label="Decentralized")
+        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Decentralized")
 
         g = graphs.OptGraphs(self.coord_dist_model)
         ax_cd = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
-        ax_cd.set_title("Coord-Distrib")
-        fig = g.plot_all_tanks(fig=fig, leg_label="Coord-Distrib")
-        fig_bat = g.plot_batteries(leg_label="Coord-Distrib", fig=fig_bat)
-        fig_gen = g.plot_all_generators(leg_label="Coord-Distrib", fig=fig_gen)
+        ax_cd.set_title("Coordinated Distributed")
+        fig = g.plot_all_tanks(fig=fig, leg_label="Coordinated\nDistributed")
+        fig_bat = g.plot_batteries(leg_label="Coordinated Distributed", fig=fig_bat)
+        fig_gen = g.plot_all_generators(leg_label="Coordinated Distributed", fig=fig_gen)
+        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Coordinated Distributed", fig=fig_power)
 
         fig_gantt.subplots_adjust(left=0.13, bottom=0.15, right=0.92, top=0.9, hspace=0.35)
         fig_gantt.text(0.5, 0.04, 'Time (hr)', ha='center')
+
+        fig_power.text(0.5, 0.04, 'Time (hr)', ha='center')
+        fig_power.text(0.04, 0.5, 'Power (kW)', va='center', rotation='vertical')
+
+        handles, labels = fig_power.axes[-1].get_legend_handles_labels()
+        fig_power.legend(handles, labels, loc='center left', bbox_to_anchor=(0.25, 0.95), ncol=2)
+        fig_power.subplots_adjust(left=0.1, bottom=0.15, right=0.9, top=0.85, hspace=0.3)
 
 
 def opt_resilience(pds_data, wds_data, scenario, display, mip_gap, x_pumps=None):

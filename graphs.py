@@ -224,7 +224,7 @@ class OptGraphs:
         sns.heatmap(p, linewidth=.5, cmap="Reds", linecolor='k', vmin=p.min(), vmax=p.max(), annot=True, fmt='.1f')
         return ax
 
-    def pumps_results(self, fig=None, leg_label=''):
+    def station_results(self, fig=None, leg_label=''):
         n = self.wds.n_stations
         ncols = max(1, int(math.ceil(math.sqrt(n))))
         nrows = max(1, int(math.ceil(n / ncols)))
@@ -237,8 +237,37 @@ class OptGraphs:
 
         for i, station_name in enumerate(self.wds.combs['station'].unique()):
             idx = self.wds.combs.loc[self.wds.combs['station'] == station_name].index
-            axes[i].plot(self.wds.combs.loc[idx, 'total_power'] @ self.x['pumps'].get()[idx, :], label=leg_label)
+            values = self.wds.combs.loc[idx, 'total_power'] @ self.x['pumps'].get()[idx, :]
+            axes[i].plot(x=range(self.opt.start_time, self.opt.start_time + len(values)), y=values, label=leg_label)
             axes[i].grid(True)
+
+        plt.tight_layout()
+        return fig
+
+    def pump_results(self, pumps_names, fig=None, leg_label=''):
+        n = self.wds.n_pumps
+        ncols = max(1, int(math.ceil(math.sqrt(n))))
+        nrows = max(1, int(math.ceil(n / ncols)))
+
+        power_mat = self.wds.combs[[_ for _ in self.wds.combs.columns if _.startswith('power')]].fillna(0).values.T
+        values = power_mat @ self.x["pumps"].get()
+        duration = values.shape[1]
+
+        if fig is None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True, figsize=(8, 5))
+            axes = np.atleast_2d(axes).ravel()
+        else:
+            axes = fig.axes
+
+        axes = np.atleast_2d(axes).ravel()
+        for i in range(self.wds.n_pumps):
+            axes[i] = time_series(x=range(self.opt.start_time, self.opt.start_time + duration), y=values[i, :],
+                                  leg_label=leg_label, ax=axes[i])
+            axes[i].set_xticks([_ for _ in range(self.opt.start_time, self.opt.start_time + duration)],
+                               [_ % 24 for _ in range(self.opt.start_time, self.opt.start_time + duration)])
+
+            axes[i].xaxis.set_major_locator(mtick.MaxNLocator(nbins=12, integer=True))
+            axes[i].set_title(pumps_names[i][5:])
 
         plt.tight_layout()
         return fig
