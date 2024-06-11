@@ -72,9 +72,10 @@ class CommunicateProtocolMaxInfo:
         self.wds_data = wds_data
         self.scenario = scenario
 
-    def get_pumps_penalties(self):
+    def get_pumps_penalties(self, mip_gap):
         # run centralized - assuming max information sharing, power utility can run centralized model
-        model = opt_resilience(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False)
+        model = opt_resilience(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False,
+                               mip_gap=mip_gap)
         # get pumps schedule
         pumps_penalties = model.wds.pumps_combs @ model.x['pumps'].get()
         pumps_penalties = np.ones(pumps_penalties.shape) - pumps_penalties
@@ -207,7 +208,7 @@ class Simulation:
         p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
         w = p.get_pumps_penalties(mip_gap)
         if w is None:
-            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display)
+            model = opt_resilience(self.pds_data, self.wds_data, self.scenario, self.opt_display, mip_gap=mip_gap)
             model.objective = None
             model.status = gurobipy.GRB.INFEASIBLE
 
