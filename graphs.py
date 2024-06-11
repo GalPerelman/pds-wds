@@ -98,7 +98,7 @@ class OptGraphs:
         fig.text(0.5, 0.04, 'Time (hr)', ha='center')
         return fig
 
-    def plot_all_pumps(self):
+    def plot_piecewise_linear_pumps(self):
         n = self.wds.n_pumps
         ncols = max(1, int(math.ceil(math.sqrt(n))))
         nrows = max(1, int(math.ceil(n / ncols)))
@@ -133,7 +133,7 @@ class OptGraphs:
 
         ax.xaxis.grid(True)
         ax.set_xticks([_ for _ in range(self.opt.start_time, self.opt.start_time + len(df))],
-                    [_ % 24 for _ in range(self.opt.start_time, self.opt.start_time + len(df))])
+                      [_ % 24 for _ in range(self.opt.start_time, self.opt.start_time + len(df))])
         ax.set_yticks([i for i in range(len(pumps_names))])
         ax.set_yticklabels([_[5:] for _ in pumps_names])
         ax.set_title(title)
@@ -208,8 +208,7 @@ class OptGraphs:
         penalty = (self.x['penalty_p'].get() * self.pds.pu_to_kw).sum(axis=0)
         ax.bar(range(len(penalty)), penalty, edgecolor='k', alpha=0.5)
         # ax.plot([], [], ' ', label=f"{leg_label}\nPenalty: {p.sum():.0f} kWhr")
-        ax.text(0.05, 0.9, f"Objective: {obj.sum():.0f}\n"
-                            f"Penalty: {penalty.sum():,.0f} kWhr", transform=ax.transAxes)
+        ax.text(0.05, 0.9, f"Objective: {obj.sum():.0f}\nPenalty: {penalty.sum():,.0f} kWhr", transform=ax.transAxes)
 
         ax.set_ylabel('Power (kW)')
         ax.set_ylim(0, 1200)
@@ -220,7 +219,7 @@ class OptGraphs:
         # penalties heatmap
         plt.figure()
         p = np.round((self.x['penalty_p'].get() * self.pds.pu_to_kw), 1)
-        p = (p-np.min(p))/(np.max(p)-np.min(p))
+        p = (p - np.min(p)) / (np.max(p) - np.min(p))
         sns.heatmap(p, linewidth=.5, cmap="Reds", linecolor='k', vmin=p.min(), vmax=p.max(), annot=True, fmt='.1f')
         return ax
 
