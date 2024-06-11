@@ -1,3 +1,8 @@
+"""
+An optimization module based on piecewise linear formulation
+Not in use in the current study and may contain errors
+"""
+
 import numpy as np
 import rsome
 from rsome import ro
@@ -208,21 +213,3 @@ class Opt:
             values = {i: self.x[x].get()[i, t_idx] * factor for i in range(n[elem_type])}
 
         return {t: round(val, dec) for t, val in values.items()}
-
-    def plot_results(self, t):
-        n_vals = self.extract_res('v', elem_type='nodes', series_type='elements', t_idx=t, dec=2)
-        e_vals = self.extract_res('p', elem_type='lines', series_type='elements', t_idx=t, factor=self.pds.pu_to_kw)
-        gr = graphs.OptGraphs(self, self.pds, self.wds)
-        gr.plot_graph(self.pds.lines, coords=self.pds.coords, from_col='from_bus', to_col='to_bus',
-                      edges_values=e_vals, nodes_values=n_vals)
-
-        gr.plot_graph(self.wds.pipes, coords=self.wds.coords, from_col='from_node', to_col='to_node',
-                      edges_values={i: (self.x['alpha'].get() * self.pl_flow_mat).sum(axis=-1)[i, t]
-
-                                    for i in range(self.wds.n_pipes)},
-                      nodes_values={i: round(self.x['h'].get()[i, t], 1) for i in range(self.wds.n_nodes)}
-                      )
-
-        gr.bus_voltage(t=0)
-        gr.plot_all_tanks()
-        gr.plot_all_pumps()
