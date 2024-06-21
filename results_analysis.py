@@ -30,21 +30,14 @@ def load_results(results_file_path: str, drop_nans=True):
     data["batteries_state"] = data["batteries_state"].apply(literal_eval)
     data["outage_lines"] = data["outage_lines"].apply(literal_eval)
 
-    data["coord_dist_reduction"] = (100 * (data["coordinated_distributed"] - data["decentralized"]) /
-                                    data["decentralized"])  # "communicate_reduction"
-    data["central_reduction"] = (100 * (data["centralized"] - data["decentralized"])
-                                 / data["decentralized"])  # cooperative_reduction
-    data["coord_dist_diff"] = data["coordinated_distributed"] - data["decentralized"]  # communicate_diff
-    data["central_diff"] = data["centralized"] - data["decentralized"]  #
+    data["coordinated_reduction"] = (100 * (data["coordinated"] - data["decoupled"]) / data["decoupled"])  # "communicate_reduction"
+    data["central_coupled_reduction"] = (100 * (data["centralized_coupled"] - data["decoupled"]) / data["decoupled"])  # cooperative_reduction
+    data["coordinated_diff"] = data["coordinated"] - data["decoupled"]  # communicate_diff
+    data["central_coupled_diff"] = data["centralized_coupled"] - data["decoupled"]  #
 
     data['t1_state'] = data['tanks_state'].apply(lambda x: x[0])
     data['tanks_state_avg'] = data['tanks_state'].apply(lambda x: sum(x) / len(x))
     data['batteries_state_avg'] = data['batteries_state'].apply(lambda x: sum(x) / len(x))
-
-    total_load = pds.dem_active.sum() * pds.pu_to_kw
-    data["p_ls_decentral"] = data["decentralized"] / total_load  # p_ls_indep
-    data["p_ls_coord_dist"] = data["coordinated_distributed"] / total_load  # p_ls_comm
-    data["p_ls_central"] = data["centralized"] / total_load  # p_ls_coop
 
     data.dropna(axis=0, how="any")
     return data
@@ -53,17 +46,17 @@ def load_results(results_file_path: str, drop_nans=True):
 def box(data):
     fig, ax = plt.subplots()
     positions = [0.2, 0.6, 1]
-    box_columns = {"decentralized": "Decentralized",
-                   "coordinated_distributed": "Coordinated\nDistributed",
-                   "centralized": "Centralized"}
+    box_columns = {"decoupled": "Decoupled",
+                   "coordinated": "Coordinated",
+                   "centralized_coupled": "Centralized\nCoupled"}
 
     df = pd.DataFrame({"mean": data[box_columns.keys()].mean(),
                        "std": data[box_columns.keys()].std(),
                        "max": data[box_columns.keys()].max(),
                        "min": data[box_columns.keys()].min(),
                        }).T
-    df["comm_deviation"] = 100 * (df["coordinated_distributed"] - df["centralized"]) / df["centralized"]
-    df["indep_deviation"] = 100 * (df["decentralized"] - df["centralized"]) / df["centralized"]
+    df["coordinated_deviation"] = 100 * (df["coordinated"] - df["centralized_coupled"]) / df["centralized_coupled"]
+    df["decoupled_deviation"] = 100 * (df["decoupled"] - df["centralized_coupled"]) / df["centralized_coupled"]
     print(df)
 
     ax.boxplot(data[box_columns.keys()],
@@ -86,10 +79,10 @@ def box(data):
 def ls_reduction(data, explanatory_var, x_label):
     fig, ax = plt.subplots()
     data = data.sort_values(explanatory_var)
-    ax.scatter(data[explanatory_var], data["coord_dist_reduction"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
-               zorder=2, label="Coordinated Distributed")
-    ax.scatter(data[explanatory_var], data["central_reduction"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
-               zorder=1, label="Centralized")
+    ax.scatter(data[explanatory_var], -data["coordinated_reduction"], edgecolor="k", linewidth=0.3, alpha=0.7,
+               zorder=2, label="Coordinated")
+    ax.scatter(data[explanatory_var], -data["central_coupled_reduction"], edgecolor="k", linewidth=0.3, alpha=0.7,
+               zorder=1, label="Centralized Coupled")
 
     ax.grid()
     ax.set_axisbelow(True)
@@ -113,7 +106,7 @@ def scatter_hist(data, explanatory_var, x_label):
     ax_histx.tick_params(axis="x", labelbottom=False)
     ax_histy.tick_params(axis="y", labelleft=False)
 
-    x, y_comm, y_coop = data[explanatory_var], data["coord_dist_reduction"], data["central_reduction"]
+    x, y_comm, y_coop = data[explanatory_var], data["coordinated"], data["central_reduction"]
     ax.scatter(x, y_comm, edgecolor="k", linewidth=0.5, s=25, alpha=0.7, zorder=2, label="Coord-Distrib")
     ax.scatter(x, y_coop, edgecolor="k", linewidth=0.5, s=25, alpha=0.7, zorder=1, label="Centralized")
 
@@ -140,47 +133,44 @@ def analyze_costs(data):
     Assumption (1): missing volume will be pumped during On-Peak to catch up with the regular operation
     Assumption (2): power of pumping the missing volume will be the average of all pumping combinations
     """
-    data["decentral_specific_cost"] = data["decentralized_wds_cost"] / data["decentralized_wds_vol"]
-    data["coordinated_distributed_specific_cost"] = data["coordinated_distributed_wds_cost"] / data[
-        "coordinated_distributed_wds_vol"]
-    data["specific_cost_increase"] = (data["coordinated_distributed_specific_cost"]) / data["decentral_specific_cost"]
+    data["decoupled_specific_cost"] = data["decoupled_wds_cost"] / data["decoupled_wds_vol"]
+    data["coordinated_specific_cost"] = data["coordinated_wds_cost"] / data["coordinated_wds_vol"]
+    data["specific_cost_increase"] = (data["coordinated_specific_cost"]) / data["decoupled_specific_cost"]
 
-    data["decentralized_final_vol"] = data["decentralized_final_vol"].apply(literal_eval)
-    data["coordinated_distributed_final_vol"] = data["coordinated_distributed_final_vol"].apply(literal_eval)
+    data["decoupled_final_vol"] = data["decoupled_final_vol"].apply(literal_eval)
+    data["coordinated_final_vol"] = data["coordinated_final_vol"].apply(literal_eval)
 
-    data["decentralized_total_final_vol"] = data.apply(lambda x: sum(x["decentralized_final_vol"]), axis=1)
-    data["coordinated_distributed_total_final_vol"] = data.apply(lambda x: sum(x["coordinated_distributed_final_vol"]),
-                                                                 axis=1)
-    data["missing_vol"] = data["decentralized_total_final_vol"] - data["coordinated_distributed_total_final_vol"]
+    data["decoupled_total_final_vol"] = data.apply(lambda x: sum(x["decoupled_final_vol"]), axis=1)
+    data["coordinated_total_final_vol"] = data.apply(lambda x: sum(x["coordinated_final_vol"]), axis=1)
+    data["missing_vol"] = data["decoupled_total_final_vol"] - data["coordinated_total_final_vol"]
 
     data["missing_cost"] = data["missing_vol"] * 0.44 * 0.25  # vol (m^3) * 0.44 (kWh / m^3) * 0.25 ($ / kWh)
-    data["delta_cost"] = data["coordinated_distributed_wds_cost"] + data["missing_cost"] - data[
-        "decentralized_wds_cost"]
-    data["delta_cost_percentage"] = 100 * data["delta_cost"] / data["decentralized_wds_cost"]
+    data["delta_cost"] = data["coordinated_wds_cost"] + data["missing_cost"] - data["decoupled_wds_cost"]
+    data["delta_cost_percentage"] = 100 * data["delta_cost"] / data["decoupled_wds_cost"]
 
-    pd.options.display.float_format = '{:.3f}'.format
-    x, y = data["coord_dist_reduction"] * -1, data["delta_cost_percentage"]
-    fig, ax = plt.subplots()
-    ax = sns.regplot(x=x, y=y, color='C0', scatter_kws={"edgecolor": "k", "linewidths": 0.5, "alpha": 0.5, "s": 25},
-                     line_kws={"color": "k"}, ax=ax)
+    # pd.options.display.float_format = '{:.3f}'.format
+    # x, y = data["coordinated"] * -1, data["delta_cost_percentage"]
+    # fig, ax = plt.subplots()
+    # ax = sns.regplot(x=x, y=y, color='C0', scatter_kws={"edgecolor": "k", "linewidths": 0.5, "alpha": 0.5, "s": 25},
+    #                  line_kws={"color": "k"}, ax=ax)
 
     # r, p = scipy.stats.pearsonr(x, y)
     # ax.text(0.05, 0.9, f'$R^2$={r:.2f}', transform=ax.transAxes)
 
-    ax.set_axisbelow(True)
-    ax.grid()
-    ax.set_xlabel("Load Shedding Reduction (%)")
-    ax.set_ylabel("Additional Cost (%)")
-
-    x, y = data["coord_dist_diff"] * -1, data["delta_cost"]
-    fig, ax = plt.subplots()
-    ax = sns.regplot(x=x, y=y, color='C0', scatter_kws={"edgecolor": "k", "linewidths": 0.5, "alpha": 0.5, "s": 25},
-                     line_kws={"color": "k"}, ax=ax)
-
-    ax.set_axisbelow(True)
-    ax.grid()
-    ax.set_xlabel("Load Shedding Reduction (kWhr)")
-    ax.set_ylabel("Additional Cost ($)")
+    # ax.set_axisbelow(True)
+    # ax.grid()
+    # ax.set_xlabel("Load Shedding Reduction (%)")
+    # ax.set_ylabel("Additional Cost (%)")
+    #
+    # x, y = data["coord_dist_diff"] * -1, data["delta_cost"]
+    # fig, ax = plt.subplots()
+    # ax = sns.regplot(x=x, y=y, color='C0', scatter_kws={"edgecolor": "k", "linewidths": 0.5, "alpha": 0.5, "s": 25},
+    #                  line_kws={"color": "k"}, ax=ax)
+    #
+    # ax.set_axisbelow(True)
+    # ax.grid()
+    # ax.set_xlabel("Load Shedding Reduction (kWh)")
+    # ax.set_ylabel("Additional Cost ($)")
 
     #  cost for WDS vs VOLL
     # According to https://eta-publications.lbl.gov/sites/default/files/lbnl-6941e.pdf:
@@ -189,16 +179,16 @@ def analyze_costs(data):
     # Accordingly, a linear regression was used to estimate VOLL according to the last 3 points
     # The VOLL is multiplied by the total ls REDUCTION comparing to the independent approach
     # This allow to estimate the contribution of the coordinated distributed approach compared to business as usual
-    data = data.sort_values("coord_dist_diff")
+    data = data.sort_values("coordinated_diff")
     data["voll"] = 0.025 * data["t"] + 1.2
-    x, y = data["coord_dist_diff"] * -data["voll"], data["delta_cost"]
+    x, y = data["coordinated_diff"] * -data["voll"], data["delta_cost"]
     fig, ax = plt.subplots()
     # ax = sns.regplot(x=x, y=y, color='C0', scatter_kws={"edgecolor": "k", "linewidths": 0.5, "alpha": 0.5, "s": 25},
     #                  line_kws={"color": "k"}, ax=ax)
-    ax.scatter(x=x, y=y, color='C0', edgecolor="k", linewidths=0.5, alpha=0.5, s=25)
+    ax.scatter(x=x, y=y, color='C0', edgecolor="k", linewidths=0.4, alpha=0.8, s=25)
     ax.set_axisbelow(True)
     ax.grid()
-    ax.set_xlabel("VOLL Reduction ($)")
+    ax.set_xlabel("Cost of load not served ($)")
     ax.set_ylabel("WDS Additional Cost ($)")
 
 
@@ -246,7 +236,7 @@ def all_factors(data):
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharey=True, figsize=(10, 6))
     axes = axes.ravel()
     for i, (factor, label) in enumerate(factors_labels.items()):
-        axes[i].scatter(data[factor], data["coord_dist_reduction"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
+        axes[i].scatter(data[factor], data["coordinated"], edgecolor="k", linewidth=0.5, s=25, alpha=0.7,
                         zorder=2)
         axes[i].yaxis.set_major_formatter(mtick.PercentFormatter())
         axes[i].set_xlabel(label)
@@ -255,10 +245,10 @@ def all_factors(data):
     expanded_rows = []
     for index, row in data.iterrows():
         for line in row['outage_lines']:
-            expanded_rows.append({'line': line, 'coord_dist_reduction': row['coord_dist_reduction']})
+            expanded_rows.append({'line': line, 'coordinated': row['coordinated']})
 
     expanded_df = pd.DataFrame(expanded_rows)
-    axes[-1].scatter(expanded_df['line'], expanded_df['coord_dist_reduction'],
+    axes[-1].scatter(expanded_df['line'], expanded_df['coordinated'],
                      edgecolor="k", linewidth=0.5, s=25, alpha=0.7, zorder=2)
     axes[-1].set_xlabel("Is line idx outage")
     axes[-1].grid()
@@ -269,9 +259,9 @@ def all_factors(data):
 def kde_plot():
     fig, ax = plt.subplots()
     total_loads = pds.dem_active.values.sum() * pds.pu_to_kw
-    (100 * data['decentralized'] / total_loads).plot(kind='kde', c=COLORS[2], label="Decentralized", ax=ax)
-    (100 * data['coordinated_distributed'] / total_loads).plot(kind='kde', c=COLORS[0], label="Coord-Distrib", ax=ax)
-    (100 * data['centralized'] / total_loads).plot(kind='kde', c=COLORS[1], label="Centralized", ax=ax)
+    (100 * data['decoupled'] / total_loads).plot(kind='kde', c=COLORS[2], label="Decoupled", ax=ax)
+    (100 * data['coordinated'] / total_loads).plot(kind='kde', c=COLORS[0], label="Coordinated", ax=ax)
+    (100 * data['centralized_coupled'] / total_loads).plot(kind='kde', c=COLORS[1], label="Centralized\nCoupled", ax=ax)
     ax.xaxis.set_major_formatter(mtick.PercentFormatter())
     ax.set_xlabel("LS out of total loads")
     ax.set_xlim(-3, 40)
@@ -280,18 +270,18 @@ def kde_plot():
 
 
 def parallel_coords():
-    data_sorted = data.sort_values(by="coord_dist_reduction", ascending=False)
+    data_sorted = data.sort_values(by="coordinated", ascending=False)
     fig = px.parallel_coordinates(data_sorted
-                                  [["coord_dist_reduction",
+                                  [["coordinated",
                                     "t", "start_time", "wds_demand_factor", "pds_demand_factor", "pv_factor",
                                     "tanks_state_avg", "batteries_state_avg"
                                     ]]
                                   ,
-                                  color="coord_dist_reduction",
+                                  color="coordinated",
                                   labels={"t": "Duration", "start_time": "Start Time",
-                                          "wds_demand_factor": "WDS Demand Multiplier",
-                                          "pds_demand_factor": "PDS Load Multiplier",
-                                          "pv_factor": "PV Availability Multiplier",
+                                          "wds_demand_factor": "WDS Demand Factor",
+                                          "pds_demand_factor": "PDS Load Factor",
+                                          "pv_factor": "PV Availability Factor",
                                           "tanks_state_avg": "Average Tanks Initial State",
                                           "batteries_state_avg": "Average Batteries Initial State"},
                                   color_continuous_scale=px.colors.sequential.Jet,
@@ -300,8 +290,8 @@ def parallel_coords():
                                   )
 
     fig.update_traces(dimensions=[
-        dict(range=[-22, 0], label="Coordinated Distributed<br>LS Reduction (%)",
-             values=data_sorted["coord_dist_reduction"], tickvals=list(np.arange(-22, 2, 2))),
+        dict(range=[-22, 0], label="Coordinated<br>LS Reduction (%)",
+             values=data_sorted["coordinated"], tickvals=list(np.arange(-22, 2, 2))),
         dict(range=[6, 24], label="Duration", values=data_sorted["t"], tickvals=[_ for _ in range(6, 25)]),
         dict(range=[0, 24], label="Start Time", values=data_sorted["start_time"], tickvals=[_ for _ in range(25)]),
         dict(range=[0.8, 1.2], label="WDS Demand Multiplier", values=data_sorted["wds_demand_factor"],
@@ -324,12 +314,12 @@ def parallel_coords():
 
 
 def mpl_parallel_coordinates(data):
-    data["coord_dist_reduction"] *= -1
-    _data_sorted = data.sort_values(by="coord_dist_reduction", ascending=True)
-    _objs = {"coord_dist_reduction": "Coordinated\nDistributed\nLS Reduction (%)", "t": "Duration",
+    data["coordinated_reduction"] *= -1
+    _data_sorted = data.sort_values(by="coordinated_reduction", ascending=True)
+    _objs = {"coordinated_reduction": "Coordinated LS\nReduction (%)", "t": "Duration",
              "start_time": "Start Time",
-             "wds_demand_factor": "WDS Demand\nMultiplier", "pds_demand_factor": "PDS Load\nMultiplier",
-             "pv_factor": "PV Availability\nMultiplier", "tanks_state_avg": "Average Tanks\nInitial State (%)",
+             "wds_demand_factor": "WDS Demand\nFactor", "pds_demand_factor": "PDS Load\nFactor",
+             "pv_factor": "PV Availability\nFactor", "tanks_state_avg": "Average Tanks\nInitial State (%)",
              "batteries_state_avg": "Average Batteries\nInitial State (%)"}
 
     objs = list(_objs.values())
@@ -411,24 +401,25 @@ def mpl_parallel_coordinates(data):
 
 
 def area_plot(data):
-    results_cols = ['decentralized', 'coordinated_distributed', 'centralized']
-    df = data.sort_values(by="decentralized", ascending=True)[results_cols]
+    results_cols = ['decoupled', 'coordinated', 'centralized_coupled']
+    df = data.sort_values(by="decoupled", ascending=True)[results_cols]
     fig, ax = plt.subplots()
-    ax.bar(range(len(df)), df.iloc[:, :]['decentralized'], alpha=0.8, color=COLORS[2], width=1, label="Decentralized")
-    ax.bar(range(len(df)), df.iloc[:, :]['coordinated_distributed'], alpha=0.8, color=COLORS[0], width=1,
-           label="Coordinated\nDistributed")
-    ax.bar(range(len(df)), df.iloc[:, :]['centralized'], alpha=0.8, color=COLORS[1], width=1, label="Centralized")
+    ax.bar(range(len(df)), df.iloc[:, :]['decoupled'], alpha=0.8, color=COLORS[2], width=1, label="Decentralized")
+    ax.bar(range(len(df)), df.iloc[:, :]['coordinated'], alpha=0.8, color=COLORS[0], width=1,
+           label="Coordinated")
+    ax.bar(range(len(df)), df.iloc[:, :]['centralized_coupled'], alpha=0.8, color=COLORS[1], width=1,
+           label="Centralized\nCoupled")
 
     ax.grid()
     ax.set_axisbelow(True)
     ax.legend()
     ax.set_ylabel("Total LS (kWh)")
 
-    df['Coordinated\nDistributed'] = df['coordinated_distributed'] - df['decentralized']
-    df['Centralized'] = df['centralized'] - df['decentralized']
-    df = df[['Centralized', 'Coordinated\nDistributed']]
-    df = df[df['Coordinated\nDistributed'] <= 0] * -1
-    df = df.sort_values('Centralized')
+    df['Coordinated'] = df['coordinated'] - df['decoupled']
+    df['Centralized\nCoupled'] = df['centralized_coupled'] - df['decoupled']
+    df = df[['Centralized\nCoupled', 'Coordinated']]
+    df = df[df['Coordinated'] <= 0] * -1
+    df = df.sort_values('Centralized\nCoupled')
     df.reset_index(inplace=True, drop=True)
 
     ax = df.plot.area()
@@ -438,14 +429,14 @@ def area_plot(data):
 
 def compare_strategies(data):
     fig, ax = plt.subplots()
-    sc = ax.scatter(data["central_diff"] * -1, data["coord_dist_diff"] * -1, alpha=1, edgecolor='k', linewidth=0.5,
-                    c=data['decentralized'], cmap="RdYlBu_r")
+    sc = ax.scatter(data["central_coupled_diff"] * -1, data["coordinated_diff"] * -1, alpha=1, edgecolor='k',
+                    linewidth=0.5, c=data['decoupled'], cmap="RdYlBu_r")
 
     ax.grid()
-    ax.set_xlabel("Centralized LS reduction (kWh)")
-    ax.set_ylabel("Coordinated Distributed LS reduction (kWh)")
+    ax.set_xlabel("Centralized Coupled LS reduction (kWh)")
+    ax.set_ylabel("Coordinated LS reduction (kWh)")
     ax.set_axisbelow(True)
-    plt.colorbar(sc, label="Decentralized LS (kWh)")
+    plt.colorbar(sc, label="Decoupled LS (kWh)")
 
 
 if __name__ == "__main__":
@@ -453,19 +444,9 @@ if __name__ == "__main__":
     wds = WDS("data/wds_wells")
     results_file = "20240605-104624_output.csv"
     data = load_results(results_file)
-    # box(data)
-    # ls_reduction(data, explanatory_var="decentralized", x_label="Load Shedding - Independent Decision Making (kWhr)")
-    # ls_reduction(data, explanatory_var="pv_factor", x_label="PV Factor")
-    # scatter_hist(data, explanatory_var="decentralized", x_label="Load Shedding - Independent Decision Making (kWhr)")
-    # analyze_costs(data)
-    # double_factor_scatter(data, 't1_state', 't', z_col='coord_dist_reduction')
-    # all_factors(data)
-    # kde_plot()
-    # parallel_coords()
-    # mpl_parallel_coordinates(data)
-    # area_plot(data)
-    # compare_strategies(data)
 
-    # plt.plot(data[['decentralized', 'coordinated_distributed', 'centralized']].mean())
-
+    box(data)
+    ls_reduction(data, explanatory_var="decoupled", x_label="Decoupled LS (kWh)")
+    analyze_costs(data)
+    mpl_parallel_coordinates(data)
     plt.show()

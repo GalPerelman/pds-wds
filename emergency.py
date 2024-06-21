@@ -72,7 +72,7 @@ class CommunicateProtocolMaxInfo:
         self.scenario = scenario
 
     def get_pumps_penalties(self, mip_gap):
-        # run centralized - assuming max information sharing, power utility can run centralized model
+        # run centralized coupling - assuming max information sharing, power utility can run centralized coupling model
         model = opt_resilience(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario, display=False,
                                mip_gap=mip_gap)
         # get pumps schedule
@@ -145,9 +145,9 @@ class Simulation:
         self.base_wds = WDS(self.wds_data)
         self.scenario = self.draw_scenario()
 
-        self.central_model = None
-        self.decentral_model = None
-        self.coord_dist_model = None
+        self.central_coupled_model = None
+        self.decoupled_model = None
+        self.coordinated_model = None
 
     def draw_scenario(self):
         s = Scenario(n_tanks=self.base_wds.n_tanks,
@@ -163,7 +163,7 @@ class Simulation:
             pass
         return s
 
-    def run_decentralized(self, wds_objective, mip_gap):
+    def run_decoupled(self, wds_objective, mip_gap):
         # INDIVIDUAL OPERATION (Independent) - WDS IS NOT AWARE TO POWER EMERGENCY AND OPTIMIZES FOR 24 HR
         scenario = copy.deepcopy(self.scenario)
         scenario.t = 24
@@ -184,7 +184,7 @@ class Simulation:
             # solves for 24 hours but take only the scenario duration first steps for comparison purposes
             x_pumps = model_wds.x['pumps'].get()[:, :self.scenario.t]
 
-            # Decentralized (no collaboration) - solve resilience problem with given WDS operation
+            # Decoupled (no collaboration) - solve resilience problem with given WDS operation
             model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                               display=self.opt_display)
             for line_idx in self.scenario.outage_lines:
@@ -194,7 +194,7 @@ class Simulation:
 
         return model
 
-    def run_centralized(self, mip_gap):
+    def run_centralized_coupled(self, mip_gap):
         model = Optimizer(pds_data=self.pds_data, wds_data=self.wds_data, scenario=self.scenario,
                           display=self.opt_display)
         for line_idx in self.scenario.outage_lines:
@@ -203,7 +203,7 @@ class Simulation:
         model.solve(mip_gap)
         return model
 
-    def run_coordinated_distributed(self, comm_protocol, mip_gap):
+    def run_coordinated(self, comm_protocol, mip_gap):
         p = comm_protocol(self.pds_data, self.wds_data, self.scenario)
         w = p.get_pumps_penalties(mip_gap)
         if w is None:
@@ -222,52 +222,52 @@ class Simulation:
         return model
 
     def run_and_record(self, mip_gap):
-        self.central_model = self.run_centralized(mip_gap=mip_gap)
-        self.decentral_model = self.run_decentralized(wds_objective="cost", mip_gap=mip_gap)
-        self.coord_dist_model = self.run_coordinated_distributed(self.comm_protocol, mip_gap=mip_gap)
+        self.central_coupled_model = self.run_centralized_coupled(mip_gap=mip_gap)
+        self.decoupled_model = self.run_decoupled(wds_objective="cost", mip_gap=mip_gap)
+        self.coordinated_model = self.run_coordinated(self.comm_protocol, mip_gap=mip_gap)
 
         try:
-            decentral_wds_cost = self.decentral_model.get_systemwise_costs(self.scenario.t)[0]
-            coord_dist_wds_cost = self.coord_dist_model.get_systemwise_costs(self.scenario.t)[0]
-            decentral_wds_penalties = list(self.decentral_model.x['penalty_final_vol'].get().T[0])
-            coord_dist_wds_penalties = list(self.coord_dist_model.x['penalty_final_vol'].get().T[0])
-            decentral_wds_pumped_vol = (
-                self.decentral_model.wds.get_pumped_vol(self.decentral_model.x['pumps'].get())).sum()
-            coord_dist_wds_pumped_vol = (
-                self.coord_dist_model.wds.get_pumped_vol(self.coord_dist_model.x['pumps'].get())).sum()
-            decentral_final_vol = self.decentral_model.x['vol'].get()[:, self.scenario.t - 1]
-            coord_dist_final_vol = self.coord_dist_model.x['vol'].get()[:, -1]
+            decoupled_wds_cost = self.decoupled_model.get_systemwise_costs(self.scenario.t)[0]
+            coordinated_wds_cost = self.coordinated_model.get_systemwise_costs(self.scenario.t)[0]
+            decoupled_wds_penalties = list(self.decoupled_model.x['penalty_final_vol'].get().T[0])
+            coordinated_wds_penalties = list(self.coordinated_model.x['penalty_final_vol'].get().T[0])
+            decoupled_wds_pumped_vol = (
+                self.decoupled_model.wds.get_pumped_vol(self.decoupled_model.x['pumps'].get())).sum()
+            coordinated_wds_pumped_vol = (
+                self.coordinated_model.wds.get_pumped_vol(self.coordinated_model.x['pumps'].get())).sum()
+            decoupled_final_vol = self.decoupled_model.x['vol'].get()[:, self.scenario.t - 1]
+            coordinated_final_vol = self.coordinated_model.x['vol'].get()[:, -1]
 
-            central_ls_ts = (self.central_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
-            coord_dist_ls_ts = (self.coord_dist_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
-            decentral_ls_ts = (self.decentral_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            central_coupled_ls_ts = (self.central_coupled_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            coordinated_ls_ts = (self.coordinated_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
+            decoupled_ls_ts = (self.decoupled_model.x['penalty_p'].get() * self.base_pds.pu_to_kw).flatten()
 
         except (RuntimeError, AttributeError):
-            decentral_wds_cost = None
-            coord_dist_wds_cost = None
-            decentral_wds_penalties = None
-            coord_dist_wds_penalties = None
-            decentral_wds_pumped_vol = None
-            coord_dist_wds_pumped_vol = None
-            decentral_final_vol = None
-            coord_dist_final_vol = None
-            central_ls_ts = None
-            coord_dist_ls_ts = None
-            decentral_ls_ts = None
+            decoupled_wds_cost = None
+            coordinated_wds_cost = None
+            decoupled_wds_penalties = None
+            coordinated_wds_penalties = None
+            decoupled_wds_pumped_vol = None
+            coordinated_wds_pumped_vol = None
+            decoupled_final_vol = None
+            coordinated_final_vol = None
+            central_coupled_ls_ts = None
+            coordinated_ls_ts = None
+            decoupled_ls_ts = None
 
         return (
             {
-                "centralized": self.central_model.objective,
-                "decentralized": self.decentral_model.objective,
-                "coordinated_distributed": self.coord_dist_model.objective,
-                "decentralized_wds_penalties": decentral_wds_penalties,
-                "coordinated_distributed_wds_penalties": coord_dist_wds_penalties,
-                "decentralized_wds_cost": decentral_wds_cost,
-                "coordinated_distributed_wds_cost": coord_dist_wds_cost,
-                "decentralized_wds_vol": decentral_wds_pumped_vol,
-                "coordinated_distributed_wds_vol": coord_dist_wds_pumped_vol,
-                "decentralized_final_vol": decentral_final_vol,
-                "coordinated_distributed_final_vol": coord_dist_final_vol,
+                "centralized_coupled": self.central_coupled_model.objective,
+                "decoupled": self.decoupled_model.objective,
+                "coordinated": self.coordinated_model.objective,
+                "decoupled_wds_penalties": decoupled_wds_penalties,
+                "coordinated_wds_penalties": coordinated_wds_penalties,
+                "decoupled_wds_cost": decoupled_wds_cost,
+                "coordinated_wds_cost": coordinated_wds_cost,
+                "decoupled_wds_vol": decoupled_wds_pumped_vol,
+                "coordinated_wds_vol": coordinated_wds_pumped_vol,
+                "decoupled_final_vol": decoupled_final_vol,
+                "coordinated_final_vol": coordinated_final_vol,
                 "t": self.scenario.t,
                 "start_time": self.scenario.start_time,
                 "wds_demand_factor": self.scenario.wds_demand_factor,
@@ -279,28 +279,28 @@ class Simulation:
                 "batteries_state": self.scenario.batteries_state,
                 "final_tanks_ratio": self.final_tanks_ratio
             },
-            {"cantral_ls": central_ls_ts, "coord_dist_ls": coord_dist_ls_ts, "decantral_ls": decentral_ls_ts}
+            {"cantral_ls": central_coupled_ls_ts, "coord_dist_ls": coordinated_ls_ts, "decantral_ls": decoupled_ls_ts}
         )
 
     def plot_wds(self):
         pumps_names = [col for col in self.base_wds.combs.columns if col.startswith("pump_")]
         fig_gantt, axes = plt.subplots(nrows=2, sharex=True)
 
-        g = graphs.OptGraphs(self.decentral_model)
-        ax_decentralized = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[0])
-        ax_decentralized.set_title("Decentralized")
-        fig = g.plot_all_tanks(leg_label="Decentralized")
-        fig_bat = g.plot_batteries(leg_label="Decentralized")
-        fig_gen = g.plot_all_generators(leg_label="Decentralized")
-        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Decentralized")
+        g = graphs.OptGraphs(self.decoupled_model)
+        ax_decoupled = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[0])
+        ax_decoupled.set_title("Decoupled")
+        fig = g.plot_all_tanks(leg_label="Decoupled")
+        fig_bat = g.plot_batteries(leg_label="Decoupled")
+        fig_gen = g.plot_all_generators(leg_label="Decoupled")
+        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Decoupled")
 
-        g = graphs.OptGraphs(self.coord_dist_model)
-        ax_cd = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
-        ax_cd.set_title("Coordinated Distributed")
-        fig = g.plot_all_tanks(fig=fig, leg_label="Coordinated\nDistributed")
-        fig_bat = g.plot_batteries(leg_label="Coordinated Distributed", fig=fig_bat)
-        fig_gen = g.plot_all_generators(leg_label="Coordinated Distributed", fig=fig_gen)
-        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Coordinated Distributed", fig=fig_power)
+        g = graphs.OptGraphs(self.coordinated_model)
+        ax_coordinated = g.pumps_gantt(pumps_names=pumps_names, title='', ax=axes[1])
+        ax_coordinated.set_title("Coordinated")
+        fig = g.plot_all_tanks(fig=fig, leg_label="Coordinated")
+        fig_bat = g.plot_batteries(leg_label="Coordinated", fig=fig_bat)
+        fig_gen = g.plot_all_generators(leg_label="Coordinated", fig=fig_gen)
+        fig_power = g.pump_results(pumps_names=pumps_names, leg_label="Coordinated", fig=fig_power)
 
         fig_gantt.subplots_adjust(left=0.13, bottom=0.15, right=0.92, top=0.9, hspace=0.35)
         fig_gantt.text(0.5, 0.04, 'Time (hr)', ha='center')
@@ -344,9 +344,9 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
 
 def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
-    central_ls = pd.DataFrame()
-    coord_dist = pd.DataFrame()
-    decentral_ls = pd.DataFrame()
+    central_coupled_ls = pd.DataFrame()
+    coordinated = pd.DataFrame()
+    decoupled_ls = pd.DataFrame()
     for _ in range(n):
 
         sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False,
@@ -357,17 +357,19 @@ def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, expo
         sim_results = utils.convert_arrays_to_lists(sim_results)
         results.append(sim_results)
 
-        central_ls = pd.concat([central_ls, pd.DataFrame(time_series_ls['cantral_ls']).T], axis=0)
-        coord_dist = pd.concat([coord_dist, pd.DataFrame(time_series_ls['coord_dist_ls']).T], axis=0)
-        decentral_ls = pd.concat([decentral_ls, pd.DataFrame(time_series_ls['decantral_ls']).T], axis=0)
+        central_coupled_ls = pd.concat([central_coupled_ls, pd.DataFrame(time_series_ls['cantral_ls']).T], axis=0)
+        coordinated = pd.concat([coordinated, pd.DataFrame(time_series_ls['coord_dist_ls']).T], axis=0)
+        decoupled_ls = pd.concat([decoupled_ls, pd.DataFrame(time_series_ls['decantral_ls']).T], axis=0)
 
         if export_path:
-            export_df(pd.DataFrame(results), export_path)
-            export_df(central_ls, export_path[:-4] + "_cantral_ls.csv")
-            export_df(coord_dist, export_path[:-4] + "_coord_dist_ls.csv")
-            export_df(decentral_ls, export_path[:-4] + "_decantral_ls.csv")
+            idx = len(results)
+            export_df(pd.DataFrame([sim_results], index=[idx]), export_path)
+            export_df(pd.DataFrame([time_series_ls['cantral_ls']], index=[idx]).T, export_path[:-4] + "_cantral_ls.csv")
+            export_df(pd.DataFrame([time_series_ls['coord_dist_ls']], index=[idx]).T, export_path[:-4] + "_coord_dist_ls.csv")
+            export_df(pd.DataFrame([time_series_ls['decantral_ls']], index=[idx]).T, export_path[:-4] + "_decantral_ls.csv")
 
 
 def export_df(df, path):
-    with open(path, 'w', newline='') as file:
-        df.to_csv(file)
+    # with open(path, 'w', newline='') as file:
+    #     df.to_csv(file)
+    df.to_csv(path, mode='a', header=not os.path.exists(path))
