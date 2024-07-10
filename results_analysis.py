@@ -353,11 +353,11 @@ def parallel_coords():
 def mpl_parallel_coordinates(data):
     data["coordinated_reduction"] *= -1
     _data_sorted = data.sort_values(by="coordinated_reduction", ascending=True)
-    _objs = {"coordinated_reduction": "Coordinated LS\nReduction (%)", "t": "Duration",
+    _objs = {"coordinated_reduction": "Coordinated LS\nReduction\n(%)", "t": "Duration\n(hr)",
              "start_time": "Start Time",
              "wds_demand_factor": "WDS Demand\nFactor", "pds_demand_factor": "PDS Load\nFactor",
-             "pv_factor": "PV Availability\nFactor", "tanks_state_avg": "Average Tanks\nInitial State (%)",
-             "batteries_state_avg": "Average Batteries\nInitial State (%)"}
+             "pv_factor": "PV Availability\nFactor", "tanks_state_sum": "Total Tanks\nInitial Volume\n($m^3$)",
+             "batteries_state_sum": "Total Batteries\nInitial SOC\n(kWh)"}
 
     objs = list(_objs.values())
     data_sorted = _data_sorted[_objs.keys()].values
@@ -371,20 +371,15 @@ def mpl_parallel_coordinates(data):
         data_sorted[:, i] = np.true_divide(data_sorted[:, i] - min(data_sorted[:, i]), np.ptp(data_sorted[:, i]))
         min_max_range[objs[i]] = [min(_data_sorted[:, i]), max(_data_sorted[:, i]), np.ptp(_data_sorted[:, i])]
 
-    colormap = cm.get_cmap('YlGnBu')
+    colormap = mcolors.LinearSegmentedColormap.from_list(name='cb', colors=['#FFFCAD', '#186AC9', '#0A2847'], N=256)
+    # colormap = cm.get_cmap('YlGnBu')
     norm = mcolors.Normalize(vmin=0, vmax=1)
-
-    colormap_bad = cm.get_cmap('RdYlBu')
-    norm_bad = mcolors.Normalize(vmin=0, vmax=0.4)
 
     for i, ax_i in enumerate(ax):
         for d in range(len(data_sorted)):
-            if data_sorted[d, 0] * min_max_range[objs[0]][2] + min_max_range[objs[0]][0] >= 10:
+            if 0 <= data_sorted[d, 0] * min_max_range[objs[0]][2] + min_max_range[objs[0]][0]:  # <= 40:
                 color_good = colormap(norm(data_sorted[d, 0]))
                 ax_i.plot(objs, data_sorted[d, :], color=color_good, alpha=0.7, linewidth=2, zorder=2)
-            # if data_sorted[d, 0] * min_max_range[objs[0]][2] + min_max_range[objs[0]][0] <= 1.5:
-            #     color_bad = colormap_bad(norm_bad(data_sorted[d, 0]))
-            #     ax_i.plot(objs, data_sorted[d, :], color=color_bad, alpha=0.7, linewidth=1, zorder=1)
             else:
                 ax_i.plot(objs, data_sorted[d, :], color='lightgrey', alpha=0.3, linewidth=1, zorder=0)
         ax_i.set_xlim([x[i], x[i + 1]])
@@ -414,7 +409,7 @@ def mpl_parallel_coordinates(data):
     ax2.set_xticklabels([objs[-2], objs[-1]])
     plt.setp(ax2.get_yticklabels(), bbox=bbox)
 
-    # correction foe specific ax ticks
+    # correction for specific ax ticks
     values = [_ for _ in range(6, 25)]
     norm_values = [1 - ((24 - _) / (24 - 6)) for _ in values]
     ax[1].set_yticks(norm_values)
@@ -426,10 +421,9 @@ def mpl_parallel_coordinates(data):
     ax[2].set_yticklabels(values)
 
     plt.subplots_adjust(wspace=0, hspace=0.2, left=0.06, right=0.9, bottom=0.13, top=0.95)
-    sm_good = cm.ScalarMappable(cmap=colormap, norm=norm)
-    sm_good.set_array([])
-    cbar = plt.colorbar(sm_good, ax=ax, orientation='vertical', label="Coordinated Distributed LS Reduction (%)",
-                        fraction=0.02, pad=0.07)
+    sm = cm.ScalarMappable(cmap=colormap, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, orientation='vertical', label="Coordinated LS Reduction (%)", fraction=.02, pad=.09)
     min_val, max_val, v_range = min_max_range[objs[0]]
     locations = np.linspace(0, 1, 10)
     tick_labels = [round(_ * v_range + min_val, 2) for _ in locations]
