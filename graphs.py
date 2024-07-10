@@ -243,7 +243,7 @@ class OptGraphs:
         plt.tight_layout()
         return fig
 
-    def pump_results(self, pumps_names, fig=None, leg_label=''):
+    def pump_results(self, pumps_names, fig=None, leg_label='', axes_legend=True):
         n = self.wds.n_pumps
         ncols = max(1, int(math.ceil(math.sqrt(n))))
         nrows = max(1, int(math.ceil(n / ncols)))
@@ -267,6 +267,8 @@ class OptGraphs:
 
             axes[i].xaxis.set_major_locator(mtick.MaxNLocator(nbins=12, integer=True))
             axes[i].set_title(pumps_names[i][5:])
+            if axes_legend:
+                axes[i].legend()
 
         plt.tight_layout()
         return fig
