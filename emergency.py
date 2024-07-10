@@ -1,7 +1,4 @@
 import copy
-import datetime
-import os
-import random
 
 from gurobipy import gurobipy
 import numpy as np
@@ -345,9 +342,6 @@ def analyze_single_scenario(pds_data, wds_data, results_df: pd.DataFrame, idx: i
 
 def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, export_path=''):
     results = []
-    central_coupled_ls = pd.DataFrame()
-    coordinated = pd.DataFrame()
-    decoupled_ls = pd.DataFrame()
     for _ in range(n):
 
         sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False,
@@ -358,22 +352,14 @@ def run_random_scenarios(pds_data, wds_data, n, final_tanks_ratio, mip_gap, expo
         sim_results = utils.convert_arrays_to_lists(sim_results)
         results.append(sim_results)
 
-        central_coupled_ls = pd.concat([central_coupled_ls, pd.DataFrame(time_series_ls['cantral_ls']).T], axis=0)
-        coordinated = pd.concat([coordinated, pd.DataFrame(time_series_ls['coord_dist_ls']).T], axis=0)
-        decoupled_ls = pd.concat([decoupled_ls, pd.DataFrame(time_series_ls['decantral_ls']).T], axis=0)
-
         if export_path:
-            idx = len(results)
-            export_df(pd.DataFrame([sim_results], index=[idx]), export_path)
-            export_df(pd.DataFrame([time_series_ls['cantral_ls']], index=[idx]).T, export_path[:-4] + "_cantral_ls.csv")
-            export_df(pd.DataFrame([time_series_ls['coord_dist_ls']], index=[idx]).T, export_path[:-4] + "_coord_dist_ls.csv")
-            export_df(pd.DataFrame([time_series_ls['decantral_ls']], index=[idx]).T, export_path[:-4] + "_decantral_ls.csv")
+            export_df(pd.DataFrame(results), path=export_path)
 
 
 def export_df(df, path):
-    # with open(path, 'w', newline='') as file:
-    #     df.to_csv(file)
-    df.to_csv(path, mode='a', header=not os.path.exists(path))
+    df.to_csv(path)
+
+
 def isolate_single_factor(pds_data: str, wds_data: str, factor: str, n: int, mip_gap: float, export_path: str):
     """
     arbitrary scenario to test changes in only one of wds, pds, pv factor
