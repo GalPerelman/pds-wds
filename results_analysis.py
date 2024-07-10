@@ -104,6 +104,32 @@ def ls_reduction(data, explanatory_var, x_label):
     ax.set_ylabel("LS Reduction (%)")
     plt.subplots_adjust(left=0.15)
 
+def ls_box_reduction(data, explanatory_var, x_label):
+    fig, ax = plt.subplots()
+    df = data.copy(deep=True)
+    bin_size = 1000
+    x_min, x_max = 0, 18000
+    df[['coordinated_reduction', 'central_coupled_reduction']] *= -1
+
+    bin_edges = np.arange(start=(x_min // bin_size) * bin_size, stop=(x_max // bin_size + 1) * bin_size, step=bin_size)
+    bins_labels = [f"{int(edge + bin_size)}" for edge in bin_edges[:-1]]
+
+    df['x_bin'] = pd.cut(df[explanatory_var], bins=bin_edges, right=False, labels=bins_labels)
+    df_melted = df.melt(id_vars='x_bin', value_vars=['coordinated_reduction', 'central_coupled_reduction'],
+                        var_name='Variable', value_name='Value')
+
+    sns.boxplot(data=df_melted, x='x_bin', y='Value', hue='Variable', ax=ax, palette="tab10", boxprops=dict(alpha=.8))
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='center')
+    ax.set_xlim(-1, len(bin_edges) - 1)
+    ax.set_xlabel(x_label)
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+    ax.set_ylabel("LS Reduction (%)")
+
+    handles, labels = ax.get_legend_handles_labels()
+    new_labels = ['Coordinated', 'Centralized Coupled']
+    ax.legend(handles, new_labels, title=None)
+    plt.subplots_adjust(bottom=0.2, top=0.92)
+
 
 def scatter_hist(data, explanatory_var, x_label):
     fig = plt.figure()
