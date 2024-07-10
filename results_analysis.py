@@ -12,6 +12,7 @@ from scipy.interpolate import griddata
 import seaborn as sns
 import plotly.express as px
 
+import emergency
 from pds import PDS
 from wds import WDS
 
@@ -25,6 +26,7 @@ def load_results(results_file_path: str, drop_nans=True):
     data = pd.read_csv(results_file_path, index_col=0)
     if drop_nans:
         data = data.dropna(axis=0, how='any')
+        data = data.loc[data['decoupled'] >= 0.001]
 
     data["tanks_state"] = data["tanks_state"].apply(literal_eval)
     data["batteries_state"] = data["batteries_state"].apply(literal_eval)
@@ -37,15 +39,15 @@ def load_results(results_file_path: str, drop_nans=True):
     data[[f"b{_ + 1}" for _ in range(n_batteries)]] = pd.DataFrame(data['batteries_state'].to_list(),
                                                                    columns=[f"t{_}" for _ in range(n_batteries)])
 
-    data["coordinated_reduction"] = (
-    data["coordinated_reduction"] = (100 * (data["coordinated"] - data["decoupled"]) / data["decoupled"])  # "communicate_reduction"
-    data["central_coupled_reduction"] = (100 * (data["centralized_coupled"] - data["decoupled"]) / data["decoupled"])  # cooperative_reduction
-    data["coordinated_diff"] = data["coordinated"] - data["decoupled"]  # communicate_diff
-    data["central_coupled_diff"] = data["centralized_coupled"] - data["decoupled"]  #
+    data["coordinated_reduction"] = (100 * (data["coordinated"] - data["decoupled"]) / data["decoupled"])
+    data["central_coupled_reduction"] = (100 * (data["centralized_coupled"] - data["decoupled"]) / data["decoupled"])
+    data["coordinated_diff"] = data["coordinated"] - data["decoupled"]
+    data["central_coupled_diff"] = data["centralized_coupled"] - data["decoupled"]
 
     data['t1_state'] = data['tanks_state'].apply(lambda x: x[0])
     data['tanks_state_avg'] = data['tanks_state'].apply(lambda x: np.dot(x, wds.tanks['max_vol']) / len(x))
-    data['batteries_state_avg'] = data['batteries_state'].apply(lambda x: np.dot(x, pds.batteries['max_storage']) / len(x))
+    data['batteries_state_avg'] = data['batteries_state'].apply(lambda x:
+                                                                np.dot(x, pds.batteries['max_storage']) / len(x))
 
     data['tanks_state_sum'] = data['tanks_state'].apply(lambda x: np.dot(x, wds.tanks['max_vol']))
     data['batteries_state_sum'] = data['batteries_state'].apply(lambda x: np.dot(x, pds.batteries['max_storage']))
@@ -65,6 +67,7 @@ def box(data):
                        "std": data[box_columns.keys()].std(),
                        "max": data[box_columns.keys()].max(),
                        "min": data[box_columns.keys()].min(),
+                       "count": data[box_columns.keys()].count()
                        }).T
     df["coordinated_deviation"] = 100 * (df["coordinated"] - df["centralized_coupled"]) / df["centralized_coupled"]
     df["decoupled_deviation"] = 100 * (df["decoupled"] - df["centralized_coupled"]) / df["centralized_coupled"]
@@ -103,6 +106,7 @@ def ls_reduction(data, explanatory_var, x_label):
     ax.set_xlabel(x_label)
     ax.set_ylabel("LS Reduction (%)")
     plt.subplots_adjust(left=0.15)
+
 
 def ls_box_reduction(data, explanatory_var, x_label):
     fig, ax = plt.subplots()
@@ -225,7 +229,7 @@ def analyze_costs(data):
     ax.scatter(x=x, y=y, color='C0', edgecolor="k", linewidths=0.4, alpha=0.8, s=25)
     ax.set_axisbelow(True)
     ax.grid()
-    ax.set_xlabel("Cost of load not served ($)")
+    ax.set_xlabel("Cost of Energy Not Served ($)")
     ax.set_ylabel("WDS Additional Cost ($)")
 
 
@@ -253,11 +257,6 @@ def double_factor_scatter(data, x_col, y_col, z_col):
     ax.set_ylabel(y_col)
     ax.azim = -140
     ax.elev = 20
-    # cax = fig.add_axes([axes[0].get_position().x1 - 0.03, 0.22, 0.02, 0.48])
-    # cbar = plt.colorbar(l, cax=cax)
-    # cbar.ax.set_title('Total energy\ncosts (€)', fontsize=11)
-    # plt.subplots_adjust(left=0.01)
-    # plt.subplots_adjust(top=0.972, bottom=0.028, left=0.06, right=0.88, hspace=0.2, wspace=0.35)
 
 
 def all_factors(data):
@@ -289,7 +288,7 @@ def all_factors(data):
                      edgecolor="k", linewidth=0.5, s=25, alpha=0.7, zorder=2)
     axes[-1].set_xlabel("Is line idx outage")
     axes[-1].grid()
-    fig.text(0.02, 0.5, 'Coordinated Distributed LS reduction (%)', va='center', rotation='vertical')
+    fig.text(0.02, 0.5, 'Coordinated LS reduction (%)', va='center', rotation='vertical')
     plt.subplots_adjust(top=0.95, bottom=0.11, left=0.12, right=0.97, hspace=0.3, wspace=0.12)
 
 
@@ -459,9 +458,13 @@ def area_plot(data):
 
 
 def compare_strategies(data):
+    colors = ["#023047", "#219ebc", "#8ecae6", "#ffbf1f", "#f15e5e", "#b80000"]
+    # 023047, #219ebc, #8ecae6, #ffbf1f, #f15e5e, #b80000
+    custom_cmap = mcolors.ListedColormap(colors)
+
     fig, ax = plt.subplots()
     sc = ax.scatter(data["central_coupled_diff"] * -1, data["coordinated_diff"] * -1, alpha=1, edgecolor='k',
-                    linewidth=0.5, c=data['decoupled'], cmap="RdYlBu_r")
+                    linewidth=0.3, c=data['decoupled'], cmap=custom_cmap, s=25)
 
     ax.grid()
     ax.set_xlabel("Centralized Coupled LS reduction (kWh)")
@@ -514,11 +517,40 @@ def analyze_isolated_factors(files: dict, initial_state_param=None):
 if __name__ == "__main__":
     pds = PDS("data/pds_emergency_futurized")
     wds = WDS("data/wds_wells")
-    results_file = "20240605-104624_output.csv"
+    results_file = "20240708-191610_output.csv"
     data = load_results(results_file)
 
     box(data)
-    ls_reduction(data, explanatory_var="decoupled", x_label="Decoupled LS (kWh)")
+    ls_box_reduction(data, explanatory_var="decoupled", x_label="Decoupled LS (kWh)")
     analyze_costs(data)
     mpl_parallel_coordinates(data)
+    compare_strategies(data)
+
+    analyze_isolated_factors({"pv_factor": "_pv_factor.csv",
+                              "wds_demand_factor": "_wds_demand_factor.csv",
+                              "pds_demand_factor": "_pds_demand_factor.csv"
+                              }
+                             )
+    analyze_isolated_factors({
+        "t1": "_tanks_state.csv",
+        "t2": "_tanks_state.csv"
+    },
+        initial_state_param={"tanks_state_sum": "_tanks_state.csv"})
+
+    analyze_isolated_factors({
+        "b1": "_batteries_state.csv",
+        "b2": "_batteries_state.csv",
+        "b3": "_batteries_state.csv",
+        "b4": "_batteries_state.csv"
+    },
+        initial_state_param={"batteries_state_sum": "_batteries_state.csv"}
+    )
+
+
+    data = load_results(results_file, drop_nans=False)
+    emergency.analyze_single_scenario("data/pds_emergency_futurized", "data/wds_wells", data,
+                                      673, mip_gap=0.0001, opt_display=False)
+    emergency.analyze_single_scenario("data/pds_emergency_futurized", "data/wds_wells", data,
+                                      151, mip_gap=0.0001, opt_display=False)
+
     plt.show()
