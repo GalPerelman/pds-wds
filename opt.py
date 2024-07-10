@@ -240,8 +240,7 @@ class Optimizer:
 
     def batteries_balance(self):
         mat = np.triu(np.ones((self.t, self.t)))
-        init_mat = np.zeros((self.pds.n_bus, self.t))
-        init_mat[:, 0] = self.pds.bus['init_storage'].values
+        init_mat = np.tile(self.pds.bus['init_storage'].values, (self.t, 1)).T
         self.model.st((self.x['bat_p'] @ mat) + init_mat - self.x['bat_e'] == 0)
 
     def bus_balance(self, x_pumps):
