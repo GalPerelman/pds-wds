@@ -470,6 +470,47 @@ def compare_strategies(data):
     plt.colorbar(sc, label="Decoupled LS (kWh)")
 
 
+def analyze_isolated_factors(files: dict, initial_state_param=None):
+    labels = {"coordinated_reduction": "Coordinated LS\nReduction (%)", "t": "Duration",
+              "start_time": "Start Time",
+              "wds_demand_factor": "WDS Demand Factor", "pds_demand_factor": "PDS Load Factor",
+              "pv_factor": "PV Availability Factor", "tanks_state_avg": "Average Tanks\nInitial State (%)",
+              "batteries_state_avg": "Average Batteries\nInitial State (%)",
+              "tanks_state_sum": "Total Initial Tanks Volume ($m^3$)",
+              "batteries_state_sum": "Total Initial Batteries Charge (kWh)",
+              "t1": "Tank 1 Initial State", "t2": "Tank 2 Initial State",
+              "b1": "Battery 1 Initial State", "b2": "Battery 2 Initial State",
+              "b3": "Battery 3 Initial State", "b4": "Battery 4 Initial State"}
+
+    n = len(files)
+    ncols = max(1, int(math.ceil(math.sqrt(n))) + 1)
+    nrows = max(1, int(math.ceil(n / ncols)))
+
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, sharey=True, figsize=(8, 4))
+    axes = np.atleast_2d(axes).ravel()
+
+    for i, (factor, file_path) in enumerate(files.items()):
+        df = load_results(file_path, drop_nans=True)
+        axes[i].scatter(df[factor], df["coordinated_reduction"] * -1, alpha=0.7, edgecolor='k', linewidth=0.3, s=25,
+                        zorder=5)
+        axes[i].grid(zorder=0)
+        axes[i].set_xlabel(labels[factor])
+        axes[i].yaxis.set_major_formatter(mtick.PercentFormatter())
+
+    fig.text(0.02, 0.55, 'Coordinated LS reduction (%)', va='center', rotation='vertical')
+    plt.subplots_adjust(top=0.9, bottom=0.2, left=0.1, right=0.96, wspace=0.15)
+
+    if initial_state_param is not None:
+        param, file_path = next(iter(initial_state_param.items()))
+        df = load_results(file_path, drop_nans=True)
+        fig, ax = plt.subplots()
+        ax.scatter(x=df[param], y=df["coordinated"], alpha=0.7, edgecolor='k', linewidth=0.3, s=25, zorder=5)
+        ax.grid(zorder=0)
+        ax.set_xlabel(labels[param])
+        ax.set_ylabel("LS Coordinated (kWh)")
+        plt.subplots_adjust(top=0.92, bottom=0.14)
+
+
 if __name__ == "__main__":
     pds = PDS("data/pds_emergency_futurized")
     wds = WDS("data/wds_wells")
