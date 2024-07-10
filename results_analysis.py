@@ -30,14 +30,25 @@ def load_results(results_file_path: str, drop_nans=True):
     data["batteries_state"] = data["batteries_state"].apply(literal_eval)
     data["outage_lines"] = data["outage_lines"].apply(literal_eval)
 
+    n_tanks = int(data['tanks_state'].str.len().mean())
+    n_batteries = int(data['batteries_state'].str.len().mean())
+    data[[f"t{_ + 1}" for _ in range(n_tanks)]] = pd.DataFrame(data['tanks_state'].to_list(),
+                                                               columns=[f"t{_}" for _ in range(n_tanks)])
+    data[[f"b{_ + 1}" for _ in range(n_batteries)]] = pd.DataFrame(data['batteries_state'].to_list(),
+                                                                   columns=[f"t{_}" for _ in range(n_batteries)])
+
+    data["coordinated_reduction"] = (
     data["coordinated_reduction"] = (100 * (data["coordinated"] - data["decoupled"]) / data["decoupled"])  # "communicate_reduction"
     data["central_coupled_reduction"] = (100 * (data["centralized_coupled"] - data["decoupled"]) / data["decoupled"])  # cooperative_reduction
     data["coordinated_diff"] = data["coordinated"] - data["decoupled"]  # communicate_diff
     data["central_coupled_diff"] = data["centralized_coupled"] - data["decoupled"]  #
 
     data['t1_state'] = data['tanks_state'].apply(lambda x: x[0])
-    data['tanks_state_avg'] = data['tanks_state'].apply(lambda x: sum(x) / len(x))
-    data['batteries_state_avg'] = data['batteries_state'].apply(lambda x: sum(x) / len(x))
+    data['tanks_state_avg'] = data['tanks_state'].apply(lambda x: np.dot(x, wds.tanks['max_vol']) / len(x))
+    data['batteries_state_avg'] = data['batteries_state'].apply(lambda x: np.dot(x, pds.batteries['max_storage']) / len(x))
+
+    data['tanks_state_sum'] = data['tanks_state'].apply(lambda x: np.dot(x, wds.tanks['max_vol']))
+    data['batteries_state_sum'] = data['batteries_state'].apply(lambda x: np.dot(x, pds.batteries['max_storage']))
 
     data.dropna(axis=0, how="any")
     return data
