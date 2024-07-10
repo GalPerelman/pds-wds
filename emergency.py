@@ -374,3 +374,33 @@ def export_df(df, path):
     # with open(path, 'w', newline='') as file:
     #     df.to_csv(file)
     df.to_csv(path, mode='a', header=not os.path.exists(path))
+def isolate_single_factor(pds_data: str, wds_data: str, factor: str, n: int, mip_gap: float, export_path: str):
+    """
+    arbitrary scenario to test changes in only one of wds, pds, pv factor
+    the factor argument that is passed to the function will be random
+    all the other scenario properties are constant according to the following
+    """
+    scenario_const = {"t": 8, "start_time": 8, "wds_demand_factor": 1, "pds_demand_factor": 1, "pv_factor": 1,
+                      "outage_lines": [21, 17],
+                      "tanks_state": np.array([0.7, 0.7]),
+                      "batteries_state": np.array([0.7, 0.7, 0.7, 0.7])
+                      }
+
+    scenario_const.pop(factor)
+    results = []
+    for _ in range(n):
+        sim = Simulation(pds_data=pds_data, wds_data=wds_data, opt_display=False,
+                         final_tanks_ratio=0, comm_protocol=CommunicateProtocolBasic,
+                         rand_scenario=True,
+                         scenario_const=scenario_const
+                         )
+
+        sim_results, time_series_ls = sim.run_and_record(mip_gap=mip_gap)
+        sim_results = utils.convert_arrays_to_lists(sim_results)
+        results.append(sim_results)
+
+        df = pd.DataFrame(results)
+        df["coordinated_reduction"] = (100 * (df["coordinated"] - df["decoupled"]) / df["decoupled"])
+
+        if export_path:
+            export_df(pd.DataFrame(results), path=export_path)
