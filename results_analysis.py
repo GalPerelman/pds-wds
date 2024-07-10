@@ -517,7 +517,7 @@ def analyze_isolated_factors(files: dict, initial_state_param=None):
 if __name__ == "__main__":
     pds = PDS("data/pds_emergency_futurized")
     wds = WDS("data/wds_wells")
-    results_file = "20240708-191610_output.csv"
+    results_file = "output/20240708-191610_output.csv"
     data = load_results(results_file)
 
     box(data)
@@ -545,7 +545,6 @@ if __name__ == "__main__":
     },
         initial_state_param={"batteries_state_sum": "_batteries_state.csv"}
     )
-
 
     data = load_results(results_file, drop_nans=False)
     emergency.analyze_single_scenario("data/pds_emergency_futurized", "data/wds_wells", data,
