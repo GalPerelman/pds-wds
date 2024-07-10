@@ -147,7 +147,7 @@ class Optimizer:
         self.mass_balance(final_tanks_ratio=final_tanks_ratio)
 
     def build_combined_problem(self, x_pumps=None, final_tanks_ratio=1):
-        wds_cost = 0
+        wds_cost = self.x['penalty_final_vol'].sum() * 10 ** 6
         pds_cost = self.get_pds_cost()
         self.cost_objective_func(wds_cost, pds_cost)
         self.power_generation_bounds()
