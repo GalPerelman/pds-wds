@@ -49,7 +49,7 @@ class Scenario:
             "t": np.random.randint(low=6, high=25),
             "start_time": np.random.randint(low=0, high=24),
             "wds_demand_factor": round(np.random.uniform(low=0.8, high=1.2), ndigits=4),
-            "pds_demand_factor": round(np.random.uniform(low=0.9, high=1.2), ndigits=4),
+            "pds_demand_factor": round(np.random.uniform(low=0.8, high=1.2), ndigits=4),
             "pv_factor": round(np.random.uniform(low=0.8, high=1.2), ndigits=4),
             "outage_lines": outage_set[np.random.randint(low=0, high=max(1, len(outage_set)))],
             "tanks_state": np.random.uniform(low=0.2, high=1, size=self.n_tanks).round(4),
